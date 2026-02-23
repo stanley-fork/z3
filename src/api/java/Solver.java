@@ -549,6 +549,16 @@ public class Solver extends Z3Object {
     }
 
     /**
+     * Import model converter from other solver.
+     *
+     * @param src The solver to import the model converter from
+     **/
+    public void importModelConverter(Solver src)
+    {
+        Native.solverImportModelConverter(getContext().nCtx(), src.getNativeObject(), getNativeObject());
+    }
+
+    /**
      * Create a clone of the current solver with respect to{@code ctx}.
      */
     public Solver translate(Context ctx) 

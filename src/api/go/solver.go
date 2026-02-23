@@ -350,6 +350,13 @@ func (s *Solver) SolveFor(variables []*Expr, terms []*Expr, guards []*Expr) {
 	C.Z3_solver_solve_for(s.ctx.ptr, s.ptr, varVec, termVec, guardVec)
 }
 
+// ImportModelConverter imports the model converter from src into this solver.
+// This transfers model simplifications from one solver instance to another,
+// useful when combining results from multiple solver instances.
+func (dst *Solver) ImportModelConverter(src *Solver) {
+	C.Z3_solver_import_model_converter(dst.ctx.ptr, src.ptr, dst.ptr)
+}
+
 // Model represents a Z3 model (satisfying assignment).
 type Model struct {
 	ctx *Context
