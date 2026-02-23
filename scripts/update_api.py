@@ -647,6 +647,8 @@ def mk_java(java_src, java_dir, package_name):
   public static native boolean propagateConsequence(Object o, long ctx, long solver, long javainfo, int num_fixed, long[] fixed, long num_eqs, long[] eq_lhs, long[] eq_rhs, long conseq);
   public static native boolean propagateNextSplit(Object o, long ctx, long solver, long javainfo, long e, long idx, int phase);
   public static native void propagateDestroy(Object o, long ctx, long solver, long javainfo);
+  public static native long onClauseInit(Object o, long ctx, long solver);
+  public static native void onClauseDestroy(long javainfo);
 
   public static abstract class UserPropagatorBase implements AutoCloseable {
     protected long ctx;
