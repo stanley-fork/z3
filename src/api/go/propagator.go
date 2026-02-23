@@ -2,9 +2,10 @@ package z3
 
 /*
 #include "z3.h"
+#include <stdint.h>
 
 // Declarations for C helper functions defined in propagator_bridge.c
-extern void z3go_solver_propagate_init(Z3_context ctx, Z3_solver s, void* user_ctx);
+extern void z3go_solver_propagate_init(Z3_context ctx, Z3_solver s, uintptr_t user_ctx);
 extern void z3go_solver_propagate_fixed(Z3_context ctx, Z3_solver s);
 extern void z3go_solver_propagate_final(Z3_context ctx, Z3_solver s);
 extern void z3go_solver_propagate_eq(Z3_context ctx, Z3_solver s);
@@ -12,12 +13,11 @@ extern void z3go_solver_propagate_diseq(Z3_context ctx, Z3_solver s);
 extern void z3go_solver_propagate_created(Z3_context ctx, Z3_solver s);
 extern void z3go_solver_propagate_decide(Z3_context ctx, Z3_solver s);
 extern void z3go_solver_propagate_on_binding(Z3_context ctx, Z3_solver s);
-extern void z3go_solver_register_on_clause(Z3_context ctx, Z3_solver s, void* user_ctx);
+extern void z3go_solver_register_on_clause(Z3_context ctx, Z3_solver s, uintptr_t user_ctx);
 */
 import "C"
 import (
 	"runtime/cgo"
-	"unsafe"
 )
 
 // UserPropagator implements a custom theory propagator for Z3.
@@ -99,8 +99,7 @@ func newUserPropagator(ctx *Context, solver *Solver, iface UserPropagatorCallbac
 		iface:  iface,
 	}
 	p.handle = cgo.NewHandle(p)
-	voidCtx := unsafe.Pointer(uintptr(p.handle))
-	C.z3go_solver_propagate_init(ctx.ptr, solver.ptr, voidCtx)
+	C.z3go_solver_propagate_init(ctx.ptr, solver.ptr, C.uintptr_t(p.handle))
 	return p
 }
 
@@ -266,8 +265,7 @@ func (s *Solver) NewOnClause(handler OnClauseHandler) *OnClause {
 		handler: handler,
 	}
 	oc.handle = cgo.NewHandle(oc)
-	voidCtx := unsafe.Pointer(uintptr(oc.handle))
-	C.z3go_solver_register_on_clause(s.ctx.ptr, s.ptr, voidCtx)
+	C.z3go_solver_register_on_clause(s.ctx.ptr, s.ptr, C.uintptr_t(oc.handle))
 	return oc
 }
 

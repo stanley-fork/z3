@@ -2,6 +2,7 @@ package z3
 
 /*
 #include "z3.h"
+#include <stdint.h>
 */
 import "C"
 import (
@@ -12,8 +13,8 @@ import (
 // goPushCb is exported to C as a callback for Z3_push_eh.
 //
 //export goPushCb
-func goPushCb(ctx unsafe.Pointer, cb C.Z3_solver_callback) {
-	p := cgo.Handle(uintptr(ctx)).Value().(*UserPropagator)
+func goPushCb(ctx C.uintptr_t, cb C.Z3_solver_callback) {
+	p := cgo.Handle(ctx).Value().(*UserPropagator)
 	old := p.cb
 	p.cb = cb
 	defer func() { p.cb = old }()
@@ -23,8 +24,8 @@ func goPushCb(ctx unsafe.Pointer, cb C.Z3_solver_callback) {
 // goPopCb is exported to C as a callback for Z3_pop_eh.
 //
 //export goPopCb
-func goPopCb(ctx unsafe.Pointer, cb C.Z3_solver_callback, numScopes C.uint) {
-	p := cgo.Handle(uintptr(ctx)).Value().(*UserPropagator)
+func goPopCb(ctx C.uintptr_t, cb C.Z3_solver_callback, numScopes C.uint) {
+	p := cgo.Handle(ctx).Value().(*UserPropagator)
 	old := p.cb
 	p.cb = cb
 	defer func() { p.cb = old }()
@@ -34,8 +35,8 @@ func goPopCb(ctx unsafe.Pointer, cb C.Z3_solver_callback, numScopes C.uint) {
 // goFreshCb is exported to C as a callback for Z3_fresh_eh.
 //
 //export goFreshCb
-func goFreshCb(ctx unsafe.Pointer, newContext C.Z3_context) unsafe.Pointer {
-	p := cgo.Handle(uintptr(ctx)).Value().(*UserPropagator)
+func goFreshCb(ctx C.uintptr_t, newContext C.Z3_context) C.uintptr_t {
+	p := cgo.Handle(ctx).Value().(*UserPropagator)
 	freshCtx := &Context{ptr: newContext}
 	freshIface := p.iface.Fresh(freshCtx)
 	freshProp := &UserPropagator{
@@ -43,14 +44,14 @@ func goFreshCb(ctx unsafe.Pointer, newContext C.Z3_context) unsafe.Pointer {
 		iface: freshIface,
 	}
 	freshProp.handle = cgo.NewHandle(freshProp)
-	return unsafe.Pointer(uintptr(freshProp.handle))
+	return C.uintptr_t(freshProp.handle)
 }
 
 // goFixedCb is exported to C as a callback for Z3_fixed_eh.
 //
 //export goFixedCb
-func goFixedCb(ctx unsafe.Pointer, cb C.Z3_solver_callback, t C.Z3_ast, value C.Z3_ast) {
-	p := cgo.Handle(uintptr(ctx)).Value().(*UserPropagator)
+func goFixedCb(ctx C.uintptr_t, cb C.Z3_solver_callback, t C.Z3_ast, value C.Z3_ast) {
+	p := cgo.Handle(ctx).Value().(*UserPropagator)
 	if h, ok := p.iface.(FixedHandler); ok {
 		old := p.cb
 		p.cb = cb
@@ -62,8 +63,8 @@ func goFixedCb(ctx unsafe.Pointer, cb C.Z3_solver_callback, t C.Z3_ast, value C.
 // goEqCb is exported to C as a callback for Z3_eq_eh (equality).
 //
 //export goEqCb
-func goEqCb(ctx unsafe.Pointer, cb C.Z3_solver_callback, s C.Z3_ast, t C.Z3_ast) {
-	p := cgo.Handle(uintptr(ctx)).Value().(*UserPropagator)
+func goEqCb(ctx C.uintptr_t, cb C.Z3_solver_callback, s C.Z3_ast, t C.Z3_ast) {
+	p := cgo.Handle(ctx).Value().(*UserPropagator)
 	if h, ok := p.iface.(EqHandler); ok {
 		old := p.cb
 		p.cb = cb
@@ -75,8 +76,8 @@ func goEqCb(ctx unsafe.Pointer, cb C.Z3_solver_callback, s C.Z3_ast, t C.Z3_ast)
 // goDiseqCb is exported to C as a callback for Z3_eq_eh (disequality).
 //
 //export goDiseqCb
-func goDiseqCb(ctx unsafe.Pointer, cb C.Z3_solver_callback, s C.Z3_ast, t C.Z3_ast) {
-	p := cgo.Handle(uintptr(ctx)).Value().(*UserPropagator)
+func goDiseqCb(ctx C.uintptr_t, cb C.Z3_solver_callback, s C.Z3_ast, t C.Z3_ast) {
+	p := cgo.Handle(ctx).Value().(*UserPropagator)
 	if h, ok := p.iface.(DiseqHandler); ok {
 		old := p.cb
 		p.cb = cb
@@ -88,8 +89,8 @@ func goDiseqCb(ctx unsafe.Pointer, cb C.Z3_solver_callback, s C.Z3_ast, t C.Z3_a
 // goFinalCb is exported to C as a callback for Z3_final_eh.
 //
 //export goFinalCb
-func goFinalCb(ctx unsafe.Pointer, cb C.Z3_solver_callback) {
-	p := cgo.Handle(uintptr(ctx)).Value().(*UserPropagator)
+func goFinalCb(ctx C.uintptr_t, cb C.Z3_solver_callback) {
+	p := cgo.Handle(ctx).Value().(*UserPropagator)
 	if h, ok := p.iface.(FinalHandler); ok {
 		old := p.cb
 		p.cb = cb
@@ -101,8 +102,8 @@ func goFinalCb(ctx unsafe.Pointer, cb C.Z3_solver_callback) {
 // goCreatedCb is exported to C as a callback for Z3_created_eh.
 //
 //export goCreatedCb
-func goCreatedCb(ctx unsafe.Pointer, cb C.Z3_solver_callback, t C.Z3_ast) {
-	p := cgo.Handle(uintptr(ctx)).Value().(*UserPropagator)
+func goCreatedCb(ctx C.uintptr_t, cb C.Z3_solver_callback, t C.Z3_ast) {
+	p := cgo.Handle(ctx).Value().(*UserPropagator)
 	if h, ok := p.iface.(CreatedHandler); ok {
 		old := p.cb
 		p.cb = cb
@@ -114,8 +115,8 @@ func goCreatedCb(ctx unsafe.Pointer, cb C.Z3_solver_callback, t C.Z3_ast) {
 // goDecideCb is exported to C as a callback for Z3_decide_eh.
 //
 //export goDecideCb
-func goDecideCb(ctx unsafe.Pointer, cb C.Z3_solver_callback, t C.Z3_ast, idx C.uint, phase C.bool) {
-	p := cgo.Handle(uintptr(ctx)).Value().(*UserPropagator)
+func goDecideCb(ctx C.uintptr_t, cb C.Z3_solver_callback, t C.Z3_ast, idx C.uint, phase C.bool) {
+	p := cgo.Handle(ctx).Value().(*UserPropagator)
 	if h, ok := p.iface.(DecideHandler); ok {
 		old := p.cb
 		p.cb = cb
@@ -127,8 +128,8 @@ func goDecideCb(ctx unsafe.Pointer, cb C.Z3_solver_callback, t C.Z3_ast, idx C.u
 // goOnBindingCb is exported to C as a callback for Z3_on_binding_eh.
 //
 //export goOnBindingCb
-func goOnBindingCb(ctx unsafe.Pointer, cb C.Z3_solver_callback, q C.Z3_ast, inst C.Z3_ast) C.bool {
-	p := cgo.Handle(uintptr(ctx)).Value().(*UserPropagator)
+func goOnBindingCb(ctx C.uintptr_t, cb C.Z3_solver_callback, q C.Z3_ast, inst C.Z3_ast) C.bool {
+	p := cgo.Handle(ctx).Value().(*UserPropagator)
 	if h, ok := p.iface.(OnBindingHandler); ok {
 		old := p.cb
 		p.cb = cb
@@ -144,8 +145,8 @@ func goOnBindingCb(ctx unsafe.Pointer, cb C.Z3_solver_callback, q C.Z3_ast, inst
 // goOnClauseCb is exported to C as a callback for Z3_on_clause_eh.
 //
 //export goOnClauseCb
-func goOnClauseCb(ctx unsafe.Pointer, proofHint C.Z3_ast, n C.uint, deps *C.uint, literals C.Z3_ast_vector) {
-	oc := cgo.Handle(uintptr(ctx)).Value().(*OnClause)
+func goOnClauseCb(ctx C.uintptr_t, proofHint C.Z3_ast, n C.uint, deps *C.uint, literals C.Z3_ast_vector) {
+	oc := cgo.Handle(ctx).Value().(*OnClause)
 	var ph *Expr
 	if proofHint != nil {
 		ph = newExpr(oc.ctx, proofHint)
