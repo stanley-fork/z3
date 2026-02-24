@@ -134,10 +134,7 @@ func goOnBindingCb(ctx C.uintptr_t, cb C.Z3_solver_callback, q C.Z3_ast, inst C.
 		old := p.cb
 		p.cb = cb
 		defer func() { p.cb = old }()
-		if h.OnBinding(newExpr(p.ctx, q), newExpr(p.ctx, inst)) {
-			return C.bool(true)
-		}
-		return C.bool(false)
+		return C.bool(h.OnBinding(newExpr(p.ctx, q), newExpr(p.ctx, inst)))
 	}
 	return C.bool(true)
 }
