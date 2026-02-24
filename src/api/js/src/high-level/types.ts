@@ -1395,6 +1395,28 @@ export interface Solver<Name extends string = 'main'> {
   toSmtlib2(status?: string): string;
 
   /**
+   * Convert the solver's Boolean formula to DIMACS CNF format.
+   *
+   * @param includeNames - If true, include variable names in the output (default: true)
+   * @returns A string containing the DIMACS CNF representation
+   */
+  dimacs(includeNames?: boolean): string;
+
+  /**
+   * Translate the solver to a different context.
+   * @param target - The target context
+   * @returns A new Solver instance in the target context
+   */
+  translate(target: Context<Name>): Solver<Name>;
+
+  /**
+   * Retrieve a proof of unsatisfiability after a check that returned 'unsat'.
+   * Requires proof production to be enabled.
+   * @returns An expression representing the proof, or null if unavailable
+   */
+  proof(): Expr<Name> | null;
+
+  /**
    * Manually decrease the reference count of the solver
    * This is automatically done when the solver is garbage collected,
    * but calling this eagerly can help release memory sooner.
@@ -1446,9 +1468,86 @@ export interface Optimize<Name extends string = 'main'> {
 
   fromString(s: string): void;
 
-  maximize(expr: Arith<Name>): void;
+  /**
+   * Load SMT-LIB2 format assertions from a file into the optimizer.
+   *
+   * @param filename - Path to the file containing SMT-LIB2 format assertions
+   */
+  fromFile(filename: string): void;
 
-  minimize(expr: Arith<Name>): void;
+  /**
+   * Add a maximization objective.
+   * @param expr - The expression to maximize
+   * @returns A zero-based numeric handle index for this objective, used to retrieve bounds
+   *          via {@link getLower}/{@link getUpper} after calling {@link check}
+   *
+   * @example
+   * ```typescript
+   * const opt = new Optimize();
+   * const x = Int.const('x');
+   * opt.add(x.ge(0), x.le(10));
+   * const h = opt.maximize(x);
+   * await opt.check();
+   * console.log('Max x:', opt.getUpper(h).toString()); // '10'
+   * ```
+   */
+  maximize(expr: Arith<Name> | BitVec<number, Name>): number;
+
+  /**
+   * Add a minimization objective.
+   * @param expr - The expression to minimize
+   * @returns A zero-based numeric handle index for this objective, used to retrieve bounds
+   *          via {@link getLower}/{@link getUpper} after calling {@link check}
+   *
+   * @example
+   * ```typescript
+   * const opt = new Optimize();
+   * const x = Int.const('x');
+   * opt.add(x.ge(0), x.le(10));
+   * const h = opt.minimize(x);
+   * await opt.check();
+   * console.log('Min x:', opt.getLower(h).toString()); // '0'
+   * ```
+   */
+  minimize(expr: Arith<Name> | BitVec<number, Name>): number;
+
+  /**
+   * Retrieve the lower bound for the objective at the given handle index.
+   * Call this after {@link check} returns 'sat'.
+   * @param index - The handle index returned by {@link maximize} or {@link minimize}
+   */
+  getLower(index: number): Expr<Name>;
+
+  /**
+   * Retrieve the upper bound for the objective at the given handle index.
+   * Call this after {@link check} returns 'sat'.
+   * @param index - The handle index returned by {@link maximize} or {@link minimize}
+   */
+  getUpper(index: number): Expr<Name>;
+
+  /**
+   * Retrieve the unsat core after a check that returned 'unsat'.
+   * @returns An AstVector containing the subset of assumptions that caused UNSAT
+   */
+  unsatCore(): AstVector<Name, Bool<Name>>;
+
+  /**
+   * Retrieve the set of objective expressions.
+   * @returns An AstVector containing the objectives
+   */
+  objectives(): AstVector<Name, Expr<Name>>;
+
+  /**
+   * Return a string describing why the last call to {@link check} returned 'unknown'.
+   */
+  reasonUnknown(): string;
+
+  /**
+   * Translate the optimize context to a different context.
+   * @param target - The target context
+   * @returns A new Optimize instance in the target context
+   */
+  translate(target: Context<Name>): Optimize<Name>;
 
   check(...exprs: (Bool<Name> | AstVector<Name, Bool<Name>>)[]): Promise<CheckSatResult>;
 

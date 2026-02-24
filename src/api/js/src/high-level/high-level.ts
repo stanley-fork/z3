@@ -2130,6 +2130,24 @@ export function createApi(Z3: Z3Core): Z3HighLevel {
         ));
       }
 
+      dimacs(includeNames: boolean = true): string {
+        return check(Z3.solver_to_dimacs_string(contextPtr, this.ptr, includeNames));
+      }
+
+      translate(target: Context<Name>): Solver<Name> {
+        const ptr = check(Z3.solver_translate(contextPtr, this.ptr, target.ptr));
+        return new (target.Solver as unknown as new (ptr: Z3_solver) => Solver<Name>)(ptr);
+      }
+
+      proof(): Expr<Name> | null {
+        const result = Z3.solver_get_proof(contextPtr, this.ptr);
+        throwIfError();
+        if (!result) {
+          return null;
+        }
+        return _toExpr(result);
+      }
+
       fromString(s: string) {
         Z3.solver_from_string(contextPtr, this.ptr, s);
         throwIfError();
@@ -2306,12 +2324,42 @@ export function createApi(Z3: Z3Core): Z3HighLevel {
         return new AstVectorImpl(check(Z3.optimize_get_assertions(contextPtr, this.ptr)));
       }
 
-      maximize(expr: Arith<Name> | BitVec<number, Name>) {
-        check(Z3.optimize_maximize(contextPtr, this.ptr, expr.ast));
+      maximize(expr: Arith<Name> | BitVec<number, Name>): number {
+        return check(Z3.optimize_maximize(contextPtr, this.ptr, expr.ast));
       }
 
-      minimize(expr: Arith<Name> | BitVec<number, Name>) {
-        check(Z3.optimize_minimize(contextPtr, this.ptr, expr.ast));
+      minimize(expr: Arith<Name> | BitVec<number, Name>): number {
+        return check(Z3.optimize_minimize(contextPtr, this.ptr, expr.ast));
+      }
+
+      getLower(index: number): Expr<Name> {
+        return _toExpr(check(Z3.optimize_get_lower(contextPtr, this.ptr, index)));
+      }
+
+      getUpper(index: number): Expr<Name> {
+        return _toExpr(check(Z3.optimize_get_upper(contextPtr, this.ptr, index)));
+      }
+
+      unsatCore(): AstVector<Name, Bool<Name>> {
+        return new AstVectorImpl(check(Z3.optimize_get_unsat_core(contextPtr, this.ptr)));
+      }
+
+      objectives(): AstVector<Name, Expr<Name>> {
+        return new AstVectorImpl(check(Z3.optimize_get_objectives(contextPtr, this.ptr)));
+      }
+
+      reasonUnknown(): string {
+        return check(Z3.optimize_get_reason_unknown(contextPtr, this.ptr));
+      }
+
+      fromFile(filename: string): void {
+        Z3.optimize_from_file(contextPtr, this.ptr, filename);
+        throwIfError();
+      }
+
+      translate(target: Context<Name>): Optimize<Name> {
+        const ptr = check(Z3.optimize_translate(contextPtr, this.ptr, target.ptr));
+        return new (target.Optimize as unknown as new (ptr: Z3_optimize) => Optimize<Name>)(ptr);
       }
 
       async check(...exprs: (Bool<Name> | AstVector<Name, Bool<Name>>)[]): Promise<CheckSatResult> {
