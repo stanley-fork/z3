@@ -20,6 +20,7 @@ Notes:
 #include "util/gparams.h"
 #include "ast/for_each_expr.h"
 #include "ast/ast_pp.h"
+#include "ast/ast_translation.h"
 #include "ast/bv_decl_plugin.h"
 #include "ast/pb_decl_plugin.h"
 #include "ast/ast_smt_pp.h"
@@ -153,6 +154,57 @@ namespace opt {
 
     context::~context() {
         reset_maxsmts();
+    }
+
+    context* context::translate(ast_manager& target_m) {
+        // Create AST translator
+        ast_translation translator(m, target_m);
+        
+        // Create new context in target manager
+        context* result = alloc(context, target_m);
+        
+        // Copy parameters
+        result->updt_params(m_params);
+        
+        // Set logic
+        if (m_logic != symbol::null) {
+            result->set_logic(m_logic);
+        }
+        
+        // Translate hard constraints from scoped state
+        for (expr* e : m_scoped_state.m_hard) {
+            result->add_hard_constraint(translator(e));
+        }
+        
+        // Translate objectives
+        for (auto const& obj : m_scoped_state.m_objectives) {
+            if (obj.m_type == O_MAXIMIZE || obj.m_type == O_MINIMIZE) {
+                // Translate maximize/minimize objectives
+                app_ref translated_term(to_app(translator(obj.m_term.get())), target_m);
+                result->add_objective(translated_term, obj.m_type == O_MAXIMIZE);
+            }
+            else if (obj.m_type == O_MAXSMT) {
+                // Translate soft constraints for MaxSMT objectives
+                for (unsigned i = 0; i < obj.m_terms.size(); ++i) {
+                    result->add_soft_constraint(
+                        translator(obj.m_terms.get(i)),
+                        obj.m_weights[i],
+                        obj.m_id
+                    );
+                }
+            }
+        }
+        
+        // Copy configuration flags
+        result->m_enable_sat = m_enable_sat;
+        result->m_enable_sls = m_enable_sls;
+        result->m_is_clausal = m_is_clausal;
+        result->m_pp_neat = m_pp_neat;
+        result->m_pp_wcnf = m_pp_wcnf;
+        result->m_incremental = m_incremental;
+        result->m_maxsat_engine = m_maxsat_engine;
+        
+        return result;
     }
 
     void context::reset_maxsmts() {
@@ -316,6 +368,11 @@ namespace opt {
             m_model_converter->convert_initialize_value(m_scoped_state.m_values);
         for (auto & [var, value] : m_scoped_state.m_values) 
             s.user_propagate_initialize_value(var, value);
+        if (m_preferred) {
+            auto p = m_preferred;
+            s.user_propagate_init(p, p->push_eh, p->pop_eh, p->fresh_eh);
+            s.user_propagate_register_decide(p->decide_eh);
+        }
         
         opt_params optp(m_params);
         symbol pri = optp.priority();
@@ -401,6 +458,7 @@ namespace opt {
 
     void context::set_model(model_ref& m) { 
         m_model = m;
+        m_model_available = true;
         opt_params optp(m_params);
         symbol prefix = optp.solution_prefix();
         bool model2console = optp.dump_models();
@@ -433,6 +491,8 @@ namespace opt {
 
 
     void context::get_model_core(model_ref& mdl) {
+        if (!m_model_available)
+            throw default_exception("model is not available");
         mdl = m_model;
         CTRACE(opt, mdl, tout << *mdl;);
         fix_model(mdl);
@@ -684,11 +744,12 @@ namespace opt {
         for (unsigned i = 0; i < m_objectives.size(); ++i) {
             objective const& obj = m_objectives[i];
             display_objective(out, obj);
+            auto [lower, upper] = b[i];
             if (obj.m_type == O_MAXIMIZE) {
-                out << " |-> [" << b[i].first << ":" << b[i].second << "]\n";
+                out << " |-> [" << lower << ":" << upper << "]\n";
             }
             else {
-                out << " |-> [" << -b[i].second << ":" << -b[i].first << "]\n";
+                out << " |-> [" << -upper << ":" << -lower << "]\n";
             }
         }        
     }
@@ -740,7 +801,8 @@ namespace opt {
         if (!is_maxsat_query())
             return;
 
-        if (m_maxsat_engine != symbol("maxres") &&
+        if (m_maxsat_engine != symbol("maxres") && 
+            m_maxsat_engine != symbol("maxresw") &&
             m_maxsat_engine != symbol("rc2") &&
             m_maxsat_engine != symbol("rc2tot") &&
             m_maxsat_engine != symbol("rc2bin") &&
@@ -812,7 +874,7 @@ namespace opt {
                     quick_for_each_expr(proc, visited, ms[j]);
             }
             unsigned sz = get_solver().get_num_assertions();
-            for (unsigned i = 0; i < sz; i++) 
+            for (unsigned i = 0; i < sz; ++i) 
                 quick_for_each_expr(proc, visited, get_solver().get_assertion(i));
             for (expr* f : m_hard_constraints) 
                 quick_for_each_expr(proc, visited, f);
@@ -937,7 +999,7 @@ namespace opt {
             else if (is_objective(r->form(i)))
                 fmls.push_back(r->form(i));
             else
-                fmls.push_back(m.mk_implies(mk_and(m, deps.size(), deps.data()), r->form(i)));
+                fmls.push_back(m.mk_implies(mk_and(m, deps), r->form(i)));
         }        
         if (r->inconsistent()) {
             ptr_vector<expr> core_elems;
@@ -1673,6 +1735,7 @@ namespace opt {
         m_model.reset();
         m_model_fixed.reset();
         m_core.reset();
+        m_model_available = false;
     }
 
     void context::set_pareto(pareto_base* p) {

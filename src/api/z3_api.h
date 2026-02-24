@@ -980,6 +980,32 @@ typedef enum
             3 = 011 = Z3_OP_FPA_RM_TOWARD_NEGATIVE,
             4 = 100 = Z3_OP_FPA_RM_TOWARD_ZERO.
 
+   - Z3_OP_FINITE_SET_EMPTY: Empty finite set.
+
+   - Z3_OP_FINITE_SET_SINGLETON: Finite set containing a single element.
+
+   - Z3_OP_FINITE_SET_UNION: Union of two finite sets.
+
+   - Z3_OP_FINITE_SET_INTERSECT: Intersection of two finite sets.
+
+   - Z3_OP_FINITE_SET_DIFFERENCE: Difference of two finite sets.
+
+   - Z3_OP_FINITE_SET_IN: Membership predicate for finite sets.
+
+   - Z3_OP_FINITE_SET_SIZE: Cardinality of a finite set.
+
+   - Z3_OP_FINITE_SET_SUBSET: Subset predicate for finite sets.
+
+   - Z3_OP_FINITE_SET_MAP: Map operation on finite sets.
+
+   - Z3_OP_FINITE_SET_FILTER: Filter operation on finite sets.
+
+   - Z3_OP_FINITE_SET_RANGE: Range operation for finite sets of integers.
+
+   - Z3_OP_FINITE_SET_EXT: Finite set extensionality. Returns a witness element that is in one set but not the other, demonstrating that two sets are different.
+
+   - Z3_OP_FINITE_SET_MAP_INVERSE: Inverse image under a finite set map operation. Related to reasoning about the pre-image of elements under set mappings.
+
    - Z3_OP_INTERNAL: internal (often interpreted) symbol, but no additional
         information is exposed. Tools may use the string representation of the
         function declaration to obtain more information.
@@ -1037,8 +1063,6 @@ typedef enum {
     Z3_OP_SET_SUBSET,
     Z3_OP_AS_ARRAY,
     Z3_OP_ARRAY_EXT,
-    Z3_OP_SET_HAS_SIZE,
-    Z3_OP_SET_CARD,
 
     // Bit-vectors
     Z3_OP_BNUM = 0x400,
@@ -1314,6 +1338,21 @@ typedef enum {
 
     Z3_OP_FPA_BVWRAP,
     Z3_OP_FPA_BV2RM,
+
+    // Finite Sets
+    Z3_OP_FINITE_SET_EMPTY = 0xc000,
+    Z3_OP_FINITE_SET_SINGLETON,
+    Z3_OP_FINITE_SET_UNION,
+    Z3_OP_FINITE_SET_INTERSECT,
+    Z3_OP_FINITE_SET_DIFFERENCE,
+    Z3_OP_FINITE_SET_IN,
+    Z3_OP_FINITE_SET_SIZE,
+    Z3_OP_FINITE_SET_SUBSET,
+    Z3_OP_FINITE_SET_MAP,
+    Z3_OP_FINITE_SET_FILTER,
+    Z3_OP_FINITE_SET_RANGE,
+    Z3_OP_FINITE_SET_EXT,
+    Z3_OP_FINITE_SET_MAP_INVERSE,
 
     Z3_OP_INTERNAL,
     Z3_OP_RECURSIVE,
@@ -2128,6 +2167,33 @@ extern "C" {
                                   Z3_constructor constructors[]);
 
     /**
+       \brief Create a parametric datatype with explicit type parameters.
+       
+       This function is similar to #Z3_mk_datatype, except it takes an explicit set of type parameters.
+       The parameters can be type variables created with #Z3_mk_type_variable, allowing the definition
+       of polymorphic datatypes that can be instantiated with different concrete types.
+
+       \param c logical context
+       \param name name of the datatype
+       \param num_parameters number of type parameters (can be 0)
+       \param parameters array of type parameters (type variables or concrete sorts)
+       \param num_constructors number of constructors
+       \param constructors array of constructor specifications
+
+       \sa Z3_mk_datatype
+       \sa Z3_mk_type_variable
+       \sa Z3_mk_datatype_sort
+
+       def_API('Z3_mk_polymorphic_datatype', SORT, (_in(CONTEXT), _in(SYMBOL), _in(UINT), _in_array(2, SORT), _in(UINT), _inout_array(4, CONSTRUCTOR)))
+     */
+    Z3_sort Z3_API Z3_mk_polymorphic_datatype(Z3_context c,
+                                              Z3_symbol name,
+                                              unsigned num_parameters,
+                                              Z3_sort parameters[],
+                                              unsigned num_constructors,
+                                              Z3_constructor constructors[]);
+
+    /**
        \brief create a forward reference to a recursive datatype being declared.
        The forward reference can be used in a nested occurrence: the range of an array
        or as element sort of a sequence. The forward reference should only be used when
@@ -2136,9 +2202,14 @@ extern "C" {
        Forward references can replace the use sort references, that are unsigned integers
        in the \c Z3_mk_constructor call
 
-       def_API('Z3_mk_datatype_sort', SORT, (_in(CONTEXT), _in(SYMBOL)))
+       \param c logical context
+       \param name name of the datatype
+       \param num_params number of sort parameters  
+       \param params array of sort parameters
+
+       def_API('Z3_mk_datatype_sort', SORT, (_in(CONTEXT), _in(SYMBOL), _in(UINT), _in_array(2, SORT)))
      */
-    Z3_sort Z3_API Z3_mk_datatype_sort(Z3_context c, Z3_symbol name);
+    Z3_sort Z3_API Z3_mk_datatype_sort(Z3_context c, Z3_symbol name, unsigned num_params, Z3_sort const params[]);
 
     /**
        \brief Create list of constructors.
@@ -3284,12 +3355,6 @@ extern "C" {
      */
     Z3_ast Z3_API Z3_mk_as_array(Z3_context c, Z3_func_decl f);
 
-    /**
-       \brief Create predicate that holds if Boolean array \c set has \c k elements set to true.       
-
-       def_API('Z3_mk_set_has_size', AST, (_in(CONTEXT), _in(AST), _in(AST)))
-    */
-    Z3_ast Z3_API Z3_mk_set_has_size(Z3_context c, Z3_ast set, Z3_ast k);
 
     /**@}*/
 
@@ -3387,6 +3452,107 @@ extern "C" {
     */
 
     Z3_ast Z3_API Z3_mk_array_ext(Z3_context c, Z3_ast arg1, Z3_ast arg2);
+    /**@}*/
+
+    /** @name Finite Sets */
+    /**@{*/
+    /**
+       \brief Create a finite set sort.
+
+       def_API('Z3_mk_finite_set_sort', SORT, (_in(CONTEXT), _in(SORT)))
+    */
+    Z3_sort Z3_API Z3_mk_finite_set_sort(Z3_context c, Z3_sort elem_sort);
+
+    /**
+       \brief Check if a sort is a finite set sort.
+
+       def_API('Z3_is_finite_set_sort', BOOL, (_in(CONTEXT), _in(SORT)))
+    */
+    bool Z3_API Z3_is_finite_set_sort(Z3_context c, Z3_sort s);
+
+    /**
+       \brief Get the element sort of a finite set sort.
+
+       def_API('Z3_get_finite_set_sort_basis', SORT, (_in(CONTEXT), _in(SORT)))
+    */
+    Z3_sort Z3_API Z3_get_finite_set_sort_basis(Z3_context c, Z3_sort s);
+
+    /**
+       \brief Create an empty finite set of the given sort.
+
+       def_API('Z3_mk_finite_set_empty', AST, (_in(CONTEXT), _in(SORT)))
+    */
+    Z3_ast Z3_API Z3_mk_finite_set_empty(Z3_context c, Z3_sort set_sort);
+
+    /**
+       \brief Create a singleton finite set.
+
+       def_API('Z3_mk_finite_set_singleton', AST, (_in(CONTEXT), _in(AST)))
+    */
+    Z3_ast Z3_API Z3_mk_finite_set_singleton(Z3_context c, Z3_ast elem);
+
+    /**
+       \brief Create the union of two finite sets.
+
+       def_API('Z3_mk_finite_set_union', AST, (_in(CONTEXT), _in(AST), _in(AST)))
+    */
+    Z3_ast Z3_API Z3_mk_finite_set_union(Z3_context c, Z3_ast s1, Z3_ast s2);
+
+    /**
+       \brief Create the intersection of two finite sets.
+
+       def_API('Z3_mk_finite_set_intersect', AST, (_in(CONTEXT), _in(AST), _in(AST)))
+    */
+    Z3_ast Z3_API Z3_mk_finite_set_intersect(Z3_context c, Z3_ast s1, Z3_ast s2);
+
+    /**
+       \brief Create the set difference of two finite sets.
+
+       def_API('Z3_mk_finite_set_difference', AST, (_in(CONTEXT), _in(AST), _in(AST)))
+    */
+    Z3_ast Z3_API Z3_mk_finite_set_difference(Z3_context c, Z3_ast s1, Z3_ast s2);
+
+    /**
+       \brief Check if an element is a member of a finite set.
+
+       def_API('Z3_mk_finite_set_member', AST, (_in(CONTEXT), _in(AST), _in(AST)))
+    */
+    Z3_ast Z3_API Z3_mk_finite_set_member(Z3_context c, Z3_ast elem, Z3_ast set);
+
+    /**
+       \brief Get the size (cardinality) of a finite set.
+
+       def_API('Z3_mk_finite_set_size', AST, (_in(CONTEXT), _in(AST)))
+    */
+    Z3_ast Z3_API Z3_mk_finite_set_size(Z3_context c, Z3_ast set);
+
+    /**
+       \brief Check if one finite set is a subset of another.
+
+       def_API('Z3_mk_finite_set_subset', AST, (_in(CONTEXT), _in(AST), _in(AST)))
+    */
+    Z3_ast Z3_API Z3_mk_finite_set_subset(Z3_context c, Z3_ast s1, Z3_ast s2);
+
+    /**
+       \brief Apply a function to all elements of a finite set.
+
+       def_API('Z3_mk_finite_set_map', AST, (_in(CONTEXT), _in(AST), _in(AST)))
+    */
+    Z3_ast Z3_API Z3_mk_finite_set_map(Z3_context c, Z3_ast f, Z3_ast set);
+
+    /**
+       \brief Filter a finite set using a predicate.
+
+       def_API('Z3_mk_finite_set_filter', AST, (_in(CONTEXT), _in(AST), _in(AST)))
+    */
+    Z3_ast Z3_API Z3_mk_finite_set_filter(Z3_context c, Z3_ast f, Z3_ast set);
+
+    /**
+       \brief Create a finite set of integers in the range [low, high].
+
+       def_API('Z3_mk_finite_set_range', AST, (_in(CONTEXT), _in(AST), _in(AST)))
+    */
+    Z3_ast Z3_API Z3_mk_finite_set_range(Z3_context c, Z3_ast low, Z3_ast high);
     /**@}*/
 
     /** @name Numerals */
@@ -3767,6 +3933,27 @@ extern "C" {
        def_API('Z3_mk_seq_replace', AST ,(_in(CONTEXT), _in(AST), _in(AST), _in(AST)))
      */
     Z3_ast Z3_API Z3_mk_seq_replace(Z3_context c, Z3_ast s, Z3_ast src, Z3_ast dst);
+
+    /**
+       \brief Replace all occurrences of \c src with \c dst in \c s.
+
+       def_API('Z3_mk_seq_replace_all', AST ,(_in(CONTEXT), _in(AST), _in(AST), _in(AST)))
+     */
+    Z3_ast Z3_API Z3_mk_seq_replace_all(Z3_context c, Z3_ast s, Z3_ast src, Z3_ast dst);
+
+    /**
+       \brief Replace the first occurrence of regular expression \c re with \c dst in \c s.
+
+       def_API('Z3_mk_seq_replace_re', AST ,(_in(CONTEXT), _in(AST), _in(AST), _in(AST)))
+     */
+    Z3_ast Z3_API Z3_mk_seq_replace_re(Z3_context c, Z3_ast s, Z3_ast re, Z3_ast dst);
+
+    /**
+       \brief Replace all occurrences of regular expression \c re with \c dst in \c s.
+
+       def_API('Z3_mk_seq_replace_re_all', AST ,(_in(CONTEXT), _in(AST), _in(AST), _in(AST)))
+     */
+    Z3_ast Z3_API Z3_mk_seq_replace_re_all(Z3_context c, Z3_ast s, Z3_ast re, Z3_ast dst);
 
     /**
        \brief Retrieve from \c s the unit sequence positioned at position \c index.
@@ -5824,7 +6011,7 @@ extern "C" {
        \sa Z3_append_log
        \sa Z3_close_log
 
-       extra_API('Z3_open_log', INT, (_in(STRING),))
+       extra_API('Z3_open_log', BOOL, (_in(STRING),))
     */
     bool Z3_API Z3_open_log(Z3_string filename);
 
@@ -7087,7 +7274,7 @@ extern "C" {
        \brief retrieve the decision depth of Boolean literals (variables or their negations).
        Assumes a check-sat call and no other calls (to extract models) have been invoked.
        
-       def_API('Z3_solver_get_levels', VOID, (_in(CONTEXT), _in(SOLVER), _in(AST_VECTOR), _in(UINT), _in_array(3, UINT)))
+       def_API('Z3_solver_get_levels', VOID, (_in(CONTEXT), _in(SOLVER), _in(AST_VECTOR), _in(UINT), _out_array(3, UINT)))
     */
     void Z3_API Z3_solver_get_levels(Z3_context c, Z3_solver s, Z3_ast_vector literals, unsigned sz,  unsigned levels[]);
 

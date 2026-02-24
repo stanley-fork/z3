@@ -63,7 +63,11 @@ namespace smt {
 
         void init_search_eh() override;
 
-        final_check_status final_check_eh() override;
+        final_check_status final_check_eh(unsigned) override;
+
+        unsigned num_final_check_levels() const override {
+            return 2;
+        }
 
         bool is_shared(theory_var v) const override;
     
@@ -94,6 +98,14 @@ namespace smt {
         bool get_lower(enode* n, rational& r, bool& is_strict);
         bool get_upper(enode* n, rational& r, bool& is_strict);
         void solve_for(vector<solution>& s) override;
+
+
+        // check if supplied set of linear constraints are LP feasible within current backtracking context
+        // identify core by setting Boolean flags to true for constraints used in the proof of infeasibility
+        // and return l_false if infeasible.
+        lbool check_lp_feasible(vector<std::pair<bool, expr_ref>> &ineqs, literal_vector& lit_core, enode_pair_vector& eq_core);
+
+        void updt_params() override;
                 
         void display(std::ostream & out) const override;
         

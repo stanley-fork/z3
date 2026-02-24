@@ -133,7 +133,7 @@ bool core::canonize_sign(const factorization& f) const {
 
 void core::add_monic(lpvar v, unsigned sz, lpvar const* vs) {
     m_add_buffer.resize(sz);
-    for (unsigned i = 0; i < sz; i++) {
+    for (unsigned i = 0; i < sz; ++i) {
         m_add_buffer[i] = vs[i];
     }
     m_emons.add(v, m_add_buffer);
@@ -635,7 +635,7 @@ void core::init_to_refine() {
     TRACE(nla_solver_details, tout << "emons:" << pp_emons(*this, m_emons););
     m_to_refine.reset();
     unsigned r = random(), sz = m_emons.number_of_monics();
-    for (unsigned k = 0; k < sz; k++) {
+    for (unsigned k = 0; k < sz; ++k) {
         auto const & m = *(m_emons.begin() + (k + r)% sz);
         if (!check_monic(m)) 
             insert_to_refine(m.var());
@@ -811,7 +811,7 @@ bool core::find_bfc_to_refine_on_monic(const monic& m, factorization & bf) {
 bool core::find_bfc_to_refine(const monic* & m, factorization & bf){
     m = nullptr;
     unsigned r = random(), sz = m_to_refine.size();
-    for (unsigned k = 0; k < sz; k++) {
+    for (unsigned k = 0; k < sz; ++k) {
         lpvar i = m_to_refine[(k + r) % sz];
         m = &m_emons[i];
         SASSERT (!check_monic(*m));
@@ -1143,7 +1143,7 @@ bool in_power(const svector<lpvar>& vs, unsigned l) {
 }
 
 bool core::to_refine_is_correct() const {
-    for (unsigned j = 0; j < lra.number_of_vars(); j++) {
+    for (unsigned j = 0; j < lra.number_of_vars(); ++j) {
         if (!is_monic_var(j)) continue;
         bool valid = check_monic(emon(j));
         if (valid == m_to_refine.contains(j)) {
@@ -1193,7 +1193,7 @@ void core::patch_monomial(lpvar j) {
         rational r = val(j) / v;
         SASSERT((*m_patched_monic).is_sorted());
         TRACE(nla_solver, tout << "r = " << r << ", v = " << v << "\n";);
-        for (unsigned l = 0; l < (*m_patched_monic).size(); l++) {
+        for (unsigned l = 0; l < (*m_patched_monic).size(); ++l) {
             m_patched_var = (*m_patched_monic).vars()[l];
             if (!in_power((*m_patched_monic).vars(), l) &&
                 !var_breaks_correct_monic(m_patched_var) &&
@@ -1216,7 +1216,7 @@ void core::patch_monomials_on_to_refine() {
     unsigned sz = to_refine.size();
 
     unsigned start = random();
-    for (unsigned i = 0; i < sz && !m_to_refine.empty(); i++) 
+    for (unsigned i = 0; i < sz && !m_to_refine.empty(); ++i) 
         patch_monomial(to_refine[(start + i) % sz]);
 
     TRACE(nla_solver, tout << "sz = " << sz << ", m_to_refine = " << m_to_refine.size() <<
@@ -1264,7 +1264,7 @@ void core::check_bounded_divisions() {
 // looking for a free variable inside of a monic to split
 void core::add_bounds() {
     unsigned r = random(), sz = m_to_refine.size();
-    for (unsigned k = 0; k < sz; k++) {
+    for (unsigned k = 0; k < sz; ++k) {
         lpvar i = m_to_refine[(k + r) % sz];
         auto const& m = m_emons[i];
         for (lpvar j : m.vars()) {
@@ -1282,7 +1282,7 @@ void core::add_bounds() {
     }    
 }
 
-lbool core::check() {
+lbool core::check(unsigned level) {
     lp_settings().stats().m_nla_calls++;
     TRACE(nla_solver, tout << "calls = " << lp_settings().stats().m_nla_calls << "\n";);
     lra.get_rid_of_inf_eps();
@@ -1363,7 +1363,7 @@ lbool core::check() {
             ret = bounded_nlsat();
     }
 
-    if (no_effect() && params().arith_nl_nra()) {
+    if (no_effect() && params().arith_nl_nra() && level >= 2) {
         scoped_limits sl(m_reslim);
         sl.push_child(&m_nra_lim);
         params_ref p;
@@ -1432,7 +1432,7 @@ bool core::no_lemmas_hold() const {
     
 lbool core::test_check() {
     lra.set_status(lp::lp_status::OPTIMAL);
-    return check();
+    return check(2);
 }
 
 std::unordered_set<lpvar> core::get_vars_of_expr_with_opening_terms(const nex *e ) {

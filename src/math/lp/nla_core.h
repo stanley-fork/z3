@@ -394,7 +394,7 @@ public:
 
     bool  conflict_found() const;
     
-    lbool check();
+    lbool check(unsigned level);
     lbool check_power(lpvar r, lpvar x, lpvar y);
     void check_bounded_divisions();
 
@@ -443,12 +443,18 @@ public:
     vector<lp::fixed_equality> const& fixed_equalities() const { return m_fixed_equalities; }
     bool should_check_feasible() const { return m_check_feasible; }
 
-    void add_fixed_equality(lp::lpvar v, rational const& k, lp::explanation const& e) { m_fixed_equalities.push_back({v, k, e}); }
-    void add_equality(lp::lpvar i, lp::lpvar j, lp::explanation const& e) { m_equalities.push_back({i, j, e}); }
+    void add_fixed_equality(lp::lpvar v, rational const& k, lp::explanation && e) { m_fixed_equalities.push_back({v, k, std::move(e)}); }
+    void add_equality(lp::lpvar i, lp::lpvar j, lp::explanation && e) { m_equalities.push_back({i, j, std::move(e)}); }
 
     bool throttle_enabled() const { return m_throttle_enabled; }
     nla_throttle& throttle() { return m_throttle; }
     const nla_throttle& throttle() const { return m_throttle; }
+
+    lp::lar_solver& lra_solver() { return lra; }
+
+    indexed_uint_set const& to_refine() const {
+        return m_to_refine;
+    }
 
 };  // end of core
 

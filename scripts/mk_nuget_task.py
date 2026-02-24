@@ -15,6 +15,7 @@ import sys
 import os.path
 import shutil
 import subprocess
+import re
 
 def mk_dir(d):
     if not os.path.exists(d):
@@ -33,21 +34,47 @@ os_info = {  'x64-ubuntu-latest' : ('so', 'linux-x64'),
              'arm64-osx' : ('dylib', 'osx-arm64'),
              'debian' : ('so', 'linux-x64') }
 
+# Pattern-based mappings for more flexible matching
+# These patterns handle version numbers and other variable parts
+os_patterns = [
+    (re.compile(r'x64-glibc-\d+(?:\.\d+)*'), 'so', 'linux-x64'),      # Matches x64-glibc-2.35, x64-glibc-2.39, etc.
+    (re.compile(r'arm64-glibc-\d+(?:\.\d+)*'), 'so', 'linux-arm64'),  # Matches arm64-glibc-* with version
+]
+
         
 
 def classify_package(f, arch):
+    # First try exact matches from the dictionary
     for os_name in os_info:
         if os_name in f:
             ext, dst = os_info[os_name]
             return os_name, f[:-4], ext, dst
+    
+    # Then try pattern-based matching for more flexible version handling
+    for pattern, ext, dst in os_patterns:
+        match = pattern.search(f)
+        if match:
+            matched_os_name = match.group(0)
+            return matched_os_name, f[:-4], ext, dst
+    
     print("Could not classify", f)
     return None
 
 def replace(src, dst):
+    """
+    Replace destination file with source file.
+    
+    Removes the destination file if it exists, then moves the source file to the destination.
+    This ensures that the file is always moved, whether or not the destination exists.
+    
+    Previous buggy implementation only moved when removal failed, causing files to be 
+    deleted but not replaced when the destination already existed.
+    """
     try:
         os.remove(dst)
     except:
-        shutil.move(src, dst)
+        pass
+    shutil.move(src, dst)
     
 def unpack(packages, symbols, arch):
     # unzip files in packages

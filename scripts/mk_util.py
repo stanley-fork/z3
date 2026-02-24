@@ -93,6 +93,7 @@ DOTNET_CORE_ENABLED=False
 DOTNET_KEY_FILE=getenv("Z3_DOTNET_KEY_FILE", None)
 ASSEMBLY_VERSION=getenv("Z2_ASSEMBLY_VERSION", None)
 JAVA_ENABLED=False
+GO_ENABLED=False
 ML_ENABLED=False
 PYTHON_INSTALL_ENABLED=False
 STATIC_LIB=False
@@ -645,6 +646,9 @@ if os.name == 'nt':
     IS_WINDOWS=True
     # Visual Studio already displays the files being compiled
     SHOW_CPPS=False
+    # Enable Control Flow Guard by default on Windows with MSVC
+    # Note: Python build system on Windows assumes MSVC (cl.exe) compiler
+    GUARD_CF = True
 elif os.name == 'posix':
     if os.uname()[0] == 'Darwin':
         IS_OSX=True
@@ -695,6 +699,8 @@ def display_help(exit_code):
     print("  -t, --trace                   enable tracing in release mode.")
     if IS_WINDOWS:
         print("  --guardcf                     enable Control Flow Guard runtime checks.")
+        print("                                (incompatible with /ZI, -ZI, /clr, and -clr options)")
+        print("  --no-guardcf                  disable Control Flow Guard runtime checks.")
         print("  -x, --x64                     create 64 binary when using Visual Studio.")
     else:
         print("  --x86                         force 32-bit x86 build on x64 systems.")
@@ -707,6 +713,7 @@ def display_help(exit_code):
     print("  --dotnet-key=<file>           sign the .NET assembly using the private key in <file>.")
     print("  --assembly-version=<x.x.x.x>  provide version number for build")
     print("  --java                        generate Java bindings.")
+    print("  --go                          generate Go bindings.")
     print("  --ml                          generate OCaml bindings.")
     print("  --js                          generate JScript bindings.")
     print("  --python                      generate Python bindings.")
@@ -740,13 +747,13 @@ def display_help(exit_code):
 # Parse configuration option for mk_make script
 def parse_options():
     global VERBOSE, DEBUG_MODE, IS_WINDOWS, VS_X64, ONLY_MAKEFILES, SHOW_CPPS, VS_PROJ, TRACE, VS_PAR, VS_PAR_NUM
-    global DOTNET_CORE_ENABLED, DOTNET_KEY_FILE, ASSEMBLY_VERSION, JAVA_ENABLED, ML_ENABLED, STATIC_LIB, STATIC_BIN, PREFIX, GMP, PYTHON_PACKAGE_DIR, GPROF, GIT_HASH, GIT_DESCRIBE, PYTHON_INSTALL_ENABLED, PYTHON_ENABLED
+    global DOTNET_CORE_ENABLED, DOTNET_KEY_FILE, ASSEMBLY_VERSION, JAVA_ENABLED, GO_ENABLED, ML_ENABLED, STATIC_LIB, STATIC_BIN, PREFIX, GMP, PYTHON_PACKAGE_DIR, GPROF, GIT_HASH, GIT_DESCRIBE, PYTHON_INSTALL_ENABLED, PYTHON_ENABLED
     global LINUX_X64, SLOW_OPTIMIZE, LOG_SYNC, SINGLE_THREADED
     global GUARD_CF, ALWAYS_DYNAMIC_BASE, IS_ARCH_ARM64
     try:
         options, remainder = getopt.gnu_getopt(sys.argv[1:],
                                                'b:df:sxa:hmcvtnp:gj',
-                                               ['build=', 'debug', 'silent', 'x64', 'arm64=', 'help', 'makefiles', 'showcpp', 'vsproj', 'guardcf',
+                                               ['build=', 'debug', 'silent', 'x64', 'arm64=', 'help', 'makefiles', 'showcpp', 'vsproj', 'guardcf', 'no-guardcf',
                                                 'trace', 'dotnet', 'dotnet-key=', 'assembly-version=', 'staticlib', 'prefix=', 'gmp', 'java', 'parallel=', 'gprof', 'js',
                                                 'githash=', 'git-describe', 'x86', 'ml', 'optimize', 'pypkgdir=', 'python', 'staticbin', 'log-sync', 'single-threaded'])
     except:
@@ -804,6 +811,8 @@ def parse_options():
             GMP = True
         elif opt in ('-j', '--java'):
             JAVA_ENABLED = True
+        elif opt in ('--go',):
+            GO_ENABLED = True
         elif opt == '--gprof':
             GPROF = True
         elif opt == '--githash':
@@ -821,10 +830,41 @@ def parse_options():
             PYTHON_INSTALL_ENABLED = True
         elif opt == '--guardcf':
             GUARD_CF = True
-            ALWAYS_DYNAMIC_BASE = True # /GUARD:CF requires /DYNAMICBASE
+        elif opt == '--no-guardcf':
+            GUARD_CF = False
+            # Note: ALWAYS_DYNAMIC_BASE can remain True if set elsewhere
         else:
             print("ERROR: Invalid command line option '%s'" % opt)
             display_help(1)
+
+    # Ensure ALWAYS_DYNAMIC_BASE is True whenever GUARD_CF is enabled
+    # This is required because /GUARD:CF linker option requires /DYNAMICBASE
+    if GUARD_CF:
+        ALWAYS_DYNAMIC_BASE = True
+
+def validate_guard_cf_compatibility(final_cxxflags):
+    """Validate that Control Flow Guard is compatible with the final compiler options.
+    
+    Args:
+        final_cxxflags: The complete CXXFLAGS string that will be used for compilation
+    """
+    global GUARD_CF
+    
+    if not GUARD_CF or not IS_WINDOWS:
+        return
+    
+    # Check the final compiler flags for incompatible options
+    zi_pattern = re.compile(r'[/-]ZI\b')
+    if zi_pattern.search(final_cxxflags):
+        raise MKException("Control Flow Guard (/guard:cf) is incompatible with Edit and Continue debug information (/ZI or -ZI). Disable Control Flow Guard with --no-guardcf.")
+    
+    clr_pattern = re.compile(r'[/-]clr(?::|$|\s)')
+    if clr_pattern.search(final_cxxflags):
+        raise MKException("Control Flow Guard (/guard:cf) is incompatible with Common Language Runtime compilation (/clr or -clr). Disable Control Flow Guard with --no-guardcf when using managed code.")
+    
+    # Note: /Zi or -Zi (Program Database debug info) is compatible with /guard:cf
+    if is_verbose() and GUARD_CF:
+        print("Control Flow Guard enabled and compatible with current compiler options.")
 
 
 # Return a list containing a file names included using '#include' in
@@ -916,6 +956,9 @@ def is_verbose():
 
 def is_java_enabled():
     return JAVA_ENABLED
+
+def is_go_enabled():
+    return GO_ENABLED
 
 def is_ml_enabled():
     return ML_ENABLED
@@ -2503,6 +2546,8 @@ def mk_config():
     config = open(os.path.join(BUILD_DIR, 'config.mk'), 'w')
     global CXX, CC, GMP, GUARD_CF, STATIC_BIN, GIT_HASH, CPPFLAGS, CXXFLAGS, LDFLAGS, EXAMP_DEBUG_FLAG, FPMATH_FLAGS, LOG_SYNC, SINGLE_THREADED, IS_ARCH_ARM64
     if IS_WINDOWS:
+        # On Windows, Python build system assumes MSVC (cl.exe) compiler
+        # GUARD_CF is only supported with MSVC, which is the default on Windows
         CXXFLAGS = '/nologo /Zi /D WIN32 /D _WINDOWS /EHsc /GS /Gd /std:c++20 -D_DISABLE_CONSTEXPR_MUTEX_CONSTRUCTOR'
         config.write(
             'CC=cl\n'
@@ -2531,6 +2576,10 @@ def mk_config():
         if GUARD_CF:
             extra_opt = ' %s /guard:cf' % extra_opt
             link_extra_opt = ' %s /GUARD:CF' % link_extra_opt
+        else:
+            # Explicitly disable Control Flow Guard when GUARD_CF is False
+            extra_opt = ' %s /guard:cf-' % extra_opt
+            link_extra_opt = ' %s /GUARD:NO' % link_extra_opt
         if STATIC_BIN:
             static_opt = '/MT'
         else:
@@ -2543,8 +2592,10 @@ def mk_config():
                 'LINK_FLAGS=/nologo %s\n'
                 'SLINK_FLAGS=/nologo /LDd\n' % static_opt)
             if VS_X64:
+                final_cxxflags = '/c %s /Zi /W3 /WX- /Od /Oy- /D _DEBUG /D Z3DEBUG /D _CONSOLE /D _TRACE /Gm- /RTC1 %s %s' % (CXXFLAGS, extra_opt, static_opt)
+                validate_guard_cf_compatibility(final_cxxflags)
                 config.write(
-                    'CXXFLAGS=/c %s /Zi /W3 /WX- /Od /Oy- /D _DEBUG /D Z3DEBUG /D _CONSOLE /D _TRACE /Gm- /RTC1 %s %s\n' % (CXXFLAGS, extra_opt, static_opt))
+                    'CXXFLAGS=%s\n' % final_cxxflags)
                 config.write(
                     'LINK_EXTRA_FLAGS=/link /PROFILE /DEBUG:full /MACHINE:X64 /SUBSYSTEM:CONSOLE /INCREMENTAL:NO /STACK:8388608 /OPT:REF /OPT:ICF /TLBID:1 /DYNAMICBASE /NXCOMPAT %s\n'
                     'SLINK_EXTRA_FLAGS=/link /PROFILE /DEBUG:full /MACHINE:X64 /SUBSYSTEM:WINDOWS /INCREMENTAL:NO /STACK:8388608 /OPT:REF /OPT:ICF /TLBID:1 %s %s\n' % (link_extra_opt, maybe_disable_dynamic_base, link_extra_opt))
@@ -2552,8 +2603,10 @@ def mk_config():
                 print("ARM on VS is unsupported")
                 exit(1)
             else:
+                final_cxxflags = '/c %s /Zi /W3 /WX- /Od /Oy- /D _DEBUG /D Z3DEBUG /D _CONSOLE /D _TRACE /Gm- /RTC1 /arch:SSE2 %s %s' % (CXXFLAGS, extra_opt, static_opt)
+                validate_guard_cf_compatibility(final_cxxflags)
                 config.write(
-                    'CXXFLAGS=/c %s /Zi /W3 /WX- /Od /Oy- /D _DEBUG /D Z3DEBUG /D _CONSOLE /D _TRACE /Gm- /RTC1 /arch:SSE2 %s %s\n' % (CXXFLAGS, extra_opt, static_opt))
+                    'CXXFLAGS=%s\n' % final_cxxflags)
                 config.write(
                     'LINK_EXTRA_FLAGS=/link /PROFILE /DEBUG:full /MACHINE:X86 /SUBSYSTEM:CONSOLE /INCREMENTAL:NO /STACK:8388608 /OPT:REF /OPT:ICF /TLBID:1 /DYNAMICBASE /NXCOMPAT %s\n'
                     'SLINK_EXTRA_FLAGS=/link /PROFILE /DEBUG:full /MACHINE:X86 /SUBSYSTEM:WINDOWS /INCREMENTAL:NO /STACK:8388608 /OPT:REF /OPT:ICF /TLBID:1 %s %s\n' % (link_extra_opt, maybe_disable_dynamic_base, link_extra_opt))
@@ -2568,8 +2621,10 @@ def mk_config():
             if TRACE:
                 extra_opt = '%s /D _TRACE ' % extra_opt
             if VS_X64:
+                final_cxxflags = '/c%s %s /Zi /W3 /WX- /O2 /D _EXTERNAL_RELEASE /D NDEBUG /D _LIB /D UNICODE /Gm- /GF /Gy /TP %s %s' % (GL, CXXFLAGS, extra_opt, static_opt)
+                validate_guard_cf_compatibility(final_cxxflags)
                 config.write(
-                    'CXXFLAGS=/c%s %s /Zi /W3 /WX- /O2 /D _EXTERNAL_RELEASE /D NDEBUG /D _LIB /D UNICODE /Gm- /GF /Gy /TP %s %s\n' % (GL, CXXFLAGS, extra_opt, static_opt))
+                    'CXXFLAGS=%s\n' % final_cxxflags)
                 config.write(
                     'LINK_EXTRA_FLAGS=/link%s /PROFILE /DEBUG:full /profile /MACHINE:X64 /SUBSYSTEM:CONSOLE /STACK:8388608 %s\n'
                     'SLINK_EXTRA_FLAGS=/link%s /PROFILE /DEBUG:full /profile /MACHINE:X64 /SUBSYSTEM:WINDOWS /STACK:8388608 %s\n' % (LTCG, link_extra_opt, LTCG, link_extra_opt))
@@ -2577,8 +2632,10 @@ def mk_config():
                 print("ARM on VS is unsupported")
                 exit(1)
             else:
+                final_cxxflags = '/c%s %s /Zi /WX- /O2 /Oy- /D _EXTERNAL_RELEASE /D NDEBUG /D _CONSOLE /D ASYNC_COMMANDS /Gm- /arch:SSE2 %s %s' % (GL, CXXFLAGS, extra_opt, static_opt)
+                validate_guard_cf_compatibility(final_cxxflags)
                 config.write(
-                    'CXXFLAGS=/c%s %s /Zi /WX- /O2 /Oy- /D _EXTERNAL_RELEASE /D NDEBUG /D _CONSOLE /D ASYNC_COMMANDS /Gm- /arch:SSE2 %s %s\n' % (GL, CXXFLAGS, extra_opt, static_opt))
+                    'CXXFLAGS=%s\n' % final_cxxflags)
                 config.write(
                     'LINK_EXTRA_FLAGS=/link%s /PROFILE /DEBUG:full /MACHINE:X86 /SUBSYSTEM:CONSOLE /INCREMENTAL:NO /STACK:8388608 /OPT:REF /OPT:ICF /TLBID:1 /DYNAMICBASE /NXCOMPAT %s\n'
                     'SLINK_EXTRA_FLAGS=/link%s /PROFILE /DEBUG:full /MACHINE:X86 /SUBSYSTEM:WINDOWS /INCREMENTAL:NO /STACK:8388608 /OPT:REF /OPT:ICF /TLBID:1 %s %s\n' % (LTCG, link_extra_opt, LTCG, maybe_disable_dynamic_base, link_extra_opt))
@@ -2636,8 +2693,6 @@ def mk_config():
             CPPFLAGS     = '%s -DZ3DEBUG -D_DEBUG' % CPPFLAGS
         else:
             CXXFLAGS     = '%s -O3' % CXXFLAGS
-            if GPROF:
-                CXXFLAGS     += '-fomit-frame-pointer'
             CPPFLAGS     = '%s -DNDEBUG -D_EXTERNAL_RELEASE' % CPPFLAGS
         if is_CXX_clangpp():
             CXXFLAGS   = '%s -Wno-unknown-pragmas -Wno-overloaded-virtual -Wno-unused-value' % CXXFLAGS
@@ -2666,6 +2721,10 @@ def mk_config():
             SO_EXT         = '.so'
             SLIBFLAGS      = '-shared'
             SLIBEXTRAFLAGS = '%s -mimpure-text' % SLIBEXTRAFLAGS
+        elif sysname  == 'AIX':
+            SO_EXT         = '.so'
+            SLIBFLAGS      = '-shared'
+            SLIBEXTRAFLAGS = '%s' % LDFLAGS
         elif sysname.startswith('CYGWIN'):
             SO_EXT         = '.dll'
             SLIBFLAGS      = '-shared'
@@ -2697,7 +2756,12 @@ def mk_config():
             CXXFLAGS = '%s -arch arm64' % CXXFLAGS
             LDFLAGS = '%s -arch arm64' % LDFLAGS
             SLIBEXTRAFLAGS = '%s -arch arm64' % SLIBEXTRAFLAGS
-        if IS_OSX and is_ml_enabled():
+        elif IS_OSX and os.uname()[4] == 'arm64':
+            # Cross-compiling from ARM64 host to x86_64: ensure the shared library
+            # linker also targets x86_64 (LDFLAGS already contains -arch x86_64
+            # from the environment, but SLIBEXTRAFLAGS is independent)
+            SLIBEXTRAFLAGS = '%s -arch x86_64' % SLIBEXTRAFLAGS
+        if IS_OSX:
             SLIBFLAGS += ' -Wl,-headerpad_max_install_names'
 
         config.write('PREFIX=%s\n' % PREFIX)
@@ -3535,10 +3599,11 @@ class MakeRuleCmd(object):
 def strip_path_prefix(path, prefix):
     if path.startswith(prefix):
         stripped_path = path[len(prefix):]
-        stripped_path.replace('//','/')
-        if stripped_path[0] == '/':
+        stripped_path = stripped_path.replace('//','/')
+        if len(stripped_path) > 0 and stripped_path[0] == '/':
             stripped_path = stripped_path[1:]
-        assert not os.path.isabs(stripped_path)
+        if os.path.isabs(stripped_path):
+            raise ValueError(f"Path '{path}' after stripping prefix '{prefix}' is still absolute: '{stripped_path}'")
         return stripped_path
     else:
         return path

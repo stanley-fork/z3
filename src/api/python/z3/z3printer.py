@@ -760,6 +760,8 @@ class Formatter:
             return seq1("Seq", (self.pp_sort(s.basis()), ))
         elif isinstance(s, z3.CharSortRef):
             return to_format("Char")
+        elif isinstance(s, z3.FiniteSetSortRef):
+            return seq1("FiniteSet", (self.pp_sort(s.element_sort()), ))
         else:
             return to_format(s.name())
 
@@ -831,7 +833,7 @@ class Formatter:
             else:
                 _z3_assert(z3.is_fp_value(a), "expecting FP num ast")
                 r = []
-                sgn = c_int(0)
+                sgn = ctypes.c_bool()
                 sgnb = Z3_fpa_get_numeral_sign(a.ctx_ref(), a.ast, byref(sgn))
                 exp = Z3_fpa_get_numeral_exponent_string(a.ctx_ref(), a.ast, False)
                 sig = Z3_fpa_get_numeral_significand_string(a.ctx_ref(), a.ast)
@@ -861,7 +863,7 @@ class Formatter:
             else:
                 _z3_assert(z3.is_fp_value(a), "expecting FP num ast")
                 r = []
-                sgn = (ctypes.c_int)(0)
+                sgn = ctypes.c_bool()
                 sgnb = Z3_fpa_get_numeral_sign(a.ctx_ref(), a.ast, byref(sgn))
                 exp = Z3_fpa_get_numeral_exponent_string(a.ctx_ref(), a.ast, False)
                 sig = Z3_fpa_get_numeral_significand_string(a.ctx_ref(), a.ast)

@@ -558,10 +558,10 @@ def param2java(p):
             return "LongPtr"
         elif param_type(p) == STRING:
             return "StringPtr"
+        elif param_type(p) == BOOL:
+            return "BoolPtr"
         else:
-            print("ERROR: unreachable code")
-            assert(False)
-            exit(1)
+            raise ValueError(f"ERROR: unreachable code - unexpected param_type: {param_type(p)}")
     elif k == IN_ARRAY or k == INOUT_ARRAY or k == OUT_ARRAY:
         return "%s[]" % type2java(param_type(p))
     elif k == OUT_MANAGED_ARRAY:
@@ -623,6 +623,7 @@ def mk_java(java_src, java_dir, package_name):
     java_native.write('  public static class StringPtr { public String value; }\n')
     java_native.write('  public static class ObjArrayPtr { public long[] value; }\n')
     java_native.write('  public static class UIntArrayPtr { public int[] value; }\n')
+    java_native.write('  public static class BoolPtr { public boolean value; }\n')
     java_native.write('  public static native void setInternalErrorHandler(long ctx);\n\n')
 
     java_native.write('  static {\n')
@@ -646,6 +647,8 @@ def mk_java(java_src, java_dir, package_name):
   public static native boolean propagateConsequence(Object o, long ctx, long solver, long javainfo, int num_fixed, long[] fixed, long num_eqs, long[] eq_lhs, long[] eq_rhs, long conseq);
   public static native boolean propagateNextSplit(Object o, long ctx, long solver, long javainfo, long e, long idx, int phase);
   public static native void propagateDestroy(Object o, long ctx, long solver, long javainfo);
+  public static native long onClauseInit(Object o, long ctx, long solver);
+  public static native void onClauseDestroy(long javainfo);
 
   public static abstract class UserPropagatorBase implements AutoCloseable {
     protected long ctx;
@@ -978,9 +981,9 @@ def mk_log_result_macro(file, name, result, params):
                 cap = param_array_capacity_pos(p)
                 sz  = param_array_size_pos(p)
                 if cap == sz:
-                    file.write("for (unsigned i = 0; i < Z3ARG%s; i++) { SetAO(Z3ARG%s[i], %s, i); } " % (sz, i, i))
+                    file.write("for (unsigned i = 0; i < Z3ARG%s; ++i) { SetAO(Z3ARG%s[i], %s, i); } " % (sz, i, i))
                 else:
-                    file.write("for (unsigned i = 0; Z3ARG%s && i < *Z3ARG%s; i++) { SetAO(Z3ARG%s[i], %s, i); } " % (sz, sz, i, i))
+                    file.write("for (unsigned i = 0; Z3ARG%s && i < *Z3ARG%s; ++i) { SetAO(Z3ARG%s[i], %s, i); } " % (sz, sz, i, i))
             if kind == OUT or kind == INOUT:
                 file.write("SetO((Z3ARG%s == 0 ? 0 : *Z3ARG%s), %s); " % (i, i, i))
         i = i + 1
@@ -1086,6 +1089,9 @@ def def_API(name, result, params):
             elif ty == INT64:
                 log_c.write("  I(0);\n")
                 exe_c.write("in.get_int64_addr(%s)" % i)
+            elif ty == BOOL:
+                log_c.write("  I(0);\n")
+                exe_c.write("in.get_bool_addr(%s)" % i)
             elif ty == VOID_PTR:
                 log_c.write("  P(0);\n")
                 exe_c.write("in.get_obj_addr(%s)" % i)
@@ -1093,7 +1099,7 @@ def def_API(name, result, params):
                 error("unsupported parameter for %s, %s" % (name, p))
         elif kind == IN_ARRAY or kind == INOUT_ARRAY:
             sz   = param_array_capacity_pos(p)
-            log_c.write("  for (unsigned i = 0; i < a%s; i++) { " % sz)
+            log_c.write("  for (unsigned i = 0; i < a%s; ++i) { " % sz)
             if is_obj(ty):
                 log_c.write("P(a%s[i]);" % i)
                 log_c.write(" }\n")
@@ -1130,7 +1136,7 @@ def def_API(name, result, params):
                 sz_e = ("(*a%s)" % sz)
             else:
                 sz_e = ("a%s" % sz)
-            log_c.write("  for (unsigned i = 0; i < %s; i++) { " % sz_e)
+            log_c.write("  for (unsigned i = 0; i < %s; ++i) { " % sz_e)
             if is_obj(ty):
                 log_c.write("P(0);")
                 log_c.write(" }\n")
@@ -1152,7 +1158,7 @@ def def_API(name, result, params):
                 sz_e = ("(*a%s)" % sz)
             else:
                 sz_e = ("a%s" % sz)
-            log_c.write("  for (unsigned i = 0; i < %s; i++) { " % sz_e)
+            log_c.write("  for (unsigned i = 0; i < %s; ++i) { " % sz_e)
             log_c.write("P(0);")
             log_c.write(" }\n")
             log_c.write("  Ap(%s);\n" % sz_e)
@@ -1623,7 +1629,7 @@ def mk_z3native_stubs_c(ml_src_dir, ml_output_dir): # C interface
                 t = param_type(param)
                 ts = type2str(t)
                 ml_wrapper.write('  _iter = a' + str(i) + ';\n')
-                ml_wrapper.write('  for (_i = 0; _i < _a%s; _i++) {\n' % param_array_capacity_pos(param))
+                ml_wrapper.write('  for (_i = 0; _i < _a%s; ++_i) {\n' % param_array_capacity_pos(param))
                 ml_wrapper.write('    assert(_iter != Val_emptylist);\n')
                 ml_wrapper.write('    _a%s[_i] = %s;\n' % (i, ml_unwrap(t, ts, 'Field(_iter, 0)')))
                 ml_wrapper.write('    _iter = Field(_iter, 1);\n')
@@ -2018,7 +2024,8 @@ def generate_files(api_files,
   # existing code is designed to always emit these files.
   def mk_file_or_temp(output_dir, file_name, mode='w'):
     if output_dir != None:
-      assert os.path.exists(output_dir) and os.path.isdir(output_dir)
+      if not (os.path.exists(output_dir) and os.path.isdir(output_dir)):
+        raise ValueError(f"Output directory '{output_dir}' does not exist or is not a directory")
       return open(os.path.join(output_dir, file_name), mode)
     else:
       # Return a file that we can write to without caring

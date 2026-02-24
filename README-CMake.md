@@ -365,6 +365,35 @@ build type when invoking ``cmake`` by passing ``-DCMAKE_BUILD_TYPE=<build_type>`
 For multi-configuration generators (e.g. Visual Studio) you don't set the build type
 when invoking CMake and instead set the build type within Visual Studio itself.
 
+## MSVC Security Features
+
+When building with Microsoft Visual C++ (MSVC), Z3 automatically enables several security features by default:
+
+### Control Flow Guard (CFG)
+- **CMake Option**: `Z3_ENABLE_CFG` - Defaults to `ON` for MSVC builds
+- **Compiler flag**: `/guard:cf` - Automatically enabled when `Z3_ENABLE_CFG=ON`
+- **Linker flag**: `/GUARD:CF` - Automatically enabled when `Z3_ENABLE_CFG=ON`
+- **Purpose**: Control Flow Guard analyzes control flow for indirect call targets at compile time and inserts runtime verification code to detect attempts to compromise your code by redirecting control flow to attacker-controlled locations
+- **Note**: Automatically enables `/DYNAMICBASE` as required by `/GUARD:CF`
+
+### Address Space Layout Randomization (ASLR)
+- **Linker flag**: `/DYNAMICBASE` - Enabled when Control Flow Guard is active
+- **Purpose**: Randomizes memory layout to make exploitation more difficult
+- **Note**: Required for Control Flow Guard to function properly
+
+### Incompatibilities
+Control Flow Guard is incompatible with:
+- `/ZI` (Edit and Continue debug information format)
+- `/clr` (Common Language Runtime compilation)
+
+When these incompatible options are detected, Control Flow Guard will be automatically disabled with a warning message.
+
+### Disabling Control Flow Guard
+To disable Control Flow Guard, set the CMake option:
+```bash
+cmake -DZ3_ENABLE_CFG=OFF ../
+```
+
 ## Useful options
 
 The following useful options can be passed to CMake whilst configuring.
@@ -381,9 +410,10 @@ The following useful options can be passed to CMake whilst configuring.
 * ``Python3_EXECUTABLE`` - STRING. The python executable to use during the build.
 * ``Z3_ENABLE_TRACING_FOR_NON_DEBUG`` - BOOL. If set to ``TRUE`` enable tracing in non-debug builds, if set to ``FALSE`` disable tracing in non-debug builds. Note in debug builds tracing is always enabled.
 * ``Z3_BUILD_LIBZ3_SHARED`` - BOOL. If set to ``TRUE`` build libz3 as a shared library otherwise build as a static library.
+* ``Z3_BUILD_LIBZ3_CORE`` - BOOL. If set to ``TRUE`` (default) build the core libz3 library. If set to ``FALSE``, skip building libz3 and look for a pre-installed library instead. This is useful when building only Python bindings on top of an already-installed libz3.
 * ``Z3_ENABLE_EXAMPLE_TARGETS`` - BOOL. If set to ``TRUE`` add the build targets for building the API examples.
 * ``Z3_USE_LIB_GMP`` - BOOL. If set to ``TRUE`` use the GNU multiple precision library. If set to ``FALSE`` use an internal implementation.
-* ``Z3_BUILD_PYTHON_BINDINGS`` - BOOL. If set to ``TRUE`` then Z3's python bindings will be built.
+* ``Z3_BUILD_PYTHON_BINDINGS`` - BOOL. If set to ``TRUE`` then Z3's python bindings will be built. When ``Z3_BUILD_LIBZ3_CORE`` is ``FALSE``, this will build only the Python bindings using a pre-installed libz3.
 * ``Z3_INSTALL_PYTHON_BINDINGS`` - BOOL. If set to ``TRUE`` and ``Z3_BUILD_PYTHON_BINDINGS`` is ``TRUE`` then running the ``install`` target will install Z3's Python bindings.
 * ``Z3_BUILD_DOTNET_BINDINGS`` - BOOL. If set to ``TRUE`` then Z3's .NET bindings will be built.
 * ``Z3_INSTALL_DOTNET_BINDINGS`` - BOOL. If set to ``TRUE`` and ``Z3_BUILD_DOTNET_BINDINGS`` is ``TRUE`` then running the ``install`` target will install Z3's .NET bindings.
@@ -393,6 +423,7 @@ The following useful options can be passed to CMake whilst configuring.
 * ``Z3_INSTALL_JAVA_BINDINGS`` - BOOL. If set to ``TRUE`` and ``Z3_BUILD_JAVA_BINDINGS`` is ``TRUE`` then running the ``install`` target will install Z3's Java bindings.
 * ``Z3_JAVA_JAR_INSTALLDIR`` - STRING. The path to directory to install the Z3 Java ``.jar`` file. This path should be relative to ``CMAKE_INSTALL_PREFIX``.
 * ``Z3_JAVA_JNI_LIB_INSTALLDIRR`` - STRING. The path to directory to install the Z3 Java JNI bridge library. This path should be relative to ``CMAKE_INSTALL_PREFIX``.
+* ``Z3_BUILD_GO_BINDINGS`` - BOOL. If set to ``TRUE`` then Z3's Go bindings will be built. Requires Go 1.20+ and ``Z3_BUILD_LIBZ3_SHARED=ON``.
 * ``Z3_BUILD_OCAML_BINDINGS`` - BOOL. If set to ``TRUE`` then Z3's OCaml bindings will be built.
 * ``Z3_BUILD_JULIA_BINDINGS`` - BOOL. If set to ``TRUE`` then Z3's Julia bindings will be built.
 * ``Z3_INSTALL_JULIA_BINDINGS`` - BOOL. If set to ``TRUE`` and ``Z3_BUILD_JULIA_BINDINGS`` is ``TRUE`` then running the ``install`` target will install Z3's Julia bindings.
@@ -404,8 +435,11 @@ The following useful options can be passed to CMake whilst configuring.
 * ``Z3_ALWAYS_BUILD_DOCS`` - BOOL. If set to ``TRUE`` and ``Z3_BUILD_DOCUMENTATION`` is ``TRUE`` then documentation for API bindings will always be built.
     Disabling this is useful for faster incremental builds. The documentation can be manually built by invoking the ``api_docs`` target.
 * ``Z3_LINK_TIME_OPTIMIZATION`` - BOOL. If set to ``TRUE`` link time optimization will be enabled.
-* ``Z3_ENABLE_CFI`` - BOOL. If set to ``TRUE`` will enable Control Flow Integrity security checks. This is only supported by MSVC and Clang and will
+* ``Z3_ENABLE_CFI`` - BOOL. If set to ``TRUE`` will enable Control Flow Integrity security checks. This is only supported by Clang and will
     fail on other compilers. This requires Z3_LINK_TIME_OPTIMIZATION to also be enabled.
+* ``Z3_ENABLE_CFG`` - BOOL. If set to ``TRUE`` will enable Control Flow Guard security checks. This is only supported by MSVC and will
+    fail on other compilers. This does not require link time optimization. Control Flow Guard is enabled by default for MSVC builds.
+    Note: Control Flow Guard is incompatible with ``/ZI`` (Edit and Continue debug information) and ``/clr`` (Common Language Runtime compilation).
 * ``Z3_API_LOG_SYNC`` - BOOL. If set to ``TRUE`` will enable experimental API log sync feature.
 * ``WARNINGS_AS_ERRORS`` - STRING. If set to ``ON`` compiler warnings will be treated as errors. If set to ``OFF`` compiler warnings will not be treated as errors.
     If set to ``SERIOUS_ONLY`` a subset of compiler warnings will be treated as errors.
@@ -432,6 +466,49 @@ cmake -DCMAKE_BUILD_TYPE=Release -DZ3_ENABLE_TRACING_FOR_NON_DEBUG=FALSE ../
 Z3 exposes various language bindings for its API. Below are some notes on building
 and/or installing these bindings when building Z3 with CMake.
 
+### Python bindings
+
+#### Building Python bindings with libz3
+
+The default behavior when ``Z3_BUILD_PYTHON_BINDINGS=ON`` is to build both the libz3 library
+and the Python bindings together:
+
+```
+mkdir build
+cd build
+cmake -DZ3_BUILD_PYTHON_BINDINGS=ON -DZ3_BUILD_LIBZ3_SHARED=ON ../
+make
+```
+
+#### Building only Python bindings (using pre-installed libz3)
+
+For package managers like conda-forge that want to avoid rebuilding libz3 for each Python version,
+you can build only the Python bindings by setting ``Z3_BUILD_LIBZ3_CORE=OFF``. This assumes
+libz3 is already installed on your system:
+
+```
+# First, build and install libz3 (once)
+mkdir build-libz3
+cd build-libz3
+cmake -DZ3_BUILD_LIBZ3_SHARED=ON -DCMAKE_INSTALL_PREFIX=/path/to/prefix ../
+make
+make install
+
+# Then, build Python bindings for each Python version (quickly, without rebuilding libz3)
+cd ..
+mkdir build-py310
+cd build-py310
+cmake -DZ3_BUILD_LIBZ3_CORE=OFF \
+      -DZ3_BUILD_PYTHON_BINDINGS=ON \
+      -DCMAKE_INSTALL_PREFIX=/path/to/prefix \
+      -DPython3_EXECUTABLE=/path/to/python3.10 ../
+make
+make install
+```
+
+This approach significantly reduces build time when packaging for multiple Python versions,
+as the expensive libz3 compilation happens only once.
+
 ### Java bindings
 
 The CMake build uses the ``FindJava`` and ``FindJNI`` cmake modules to detect the
@@ -446,6 +523,41 @@ Note that the built ``.jar`` file is named ``com.microsoft.z3-VERSION.jar``
 where ``VERSION`` is the Z3 version. Under non Windows systems a
 symbolic link named ``com.microsoft.z3.jar`` is provided. This symbolic
 link is not created when building under Windows.
+
+### Go bindings
+
+Go bindings can be built by setting ``Z3_BUILD_GO_BINDINGS=ON``. The Go bindings use CGO to wrap
+the Z3 C API, so you'll need:
+
+* Go 1.20 or later installed on your system
+* ``Z3_BUILD_LIBZ3_SHARED=ON`` (Go bindings require the shared library)
+
+Example:
+
+```
+mkdir build
+cd build
+cmake -DZ3_BUILD_GO_BINDINGS=ON -DZ3_BUILD_LIBZ3_SHARED=ON ../
+make
+```
+
+If CMake detects a Go installation (via ``go`` executable in PATH), it will create two optional targets:
+
+* ``go-bindings`` - Builds the Go bindings
+* ``test-go-examples`` - Runs the Go examples
+
+Note that the Go bindings are installed as source files (not compiled) since Go packages are
+typically distributed as source and compiled by the user's Go toolchain.
+
+To use the installed Go bindings, set the appropriate CGO flags:
+
+```
+export CGO_CFLAGS="-I/path/to/z3/include"
+export CGO_LDFLAGS="-L/path/to/z3/lib -lz3"
+export LD_LIBRARY_PATH="/path/to/z3/lib:$LD_LIBRARY_PATH"  # Linux/macOS
+```
+
+For detailed usage examples and API documentation, see ``src/api/go/README.md`` and ``examples/go/``.
 
 ## Developer/packager notes
 

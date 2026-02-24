@@ -293,8 +293,7 @@ namespace euf {
         // v - offset |-> t
         if (is_meta_var(p, wi.pat_offset()) && is_closed(t, 0, wi.term_offset())) {
             auto v = to_var(p);
-            auto idx = v->get_idx() - wi.pat_offset();
-            SASSERT(!m_subst.get(idx)); // reduce ensures meta variables are not in substitutions
+            SASSERT(!m_subst.get(v->get_idx() - wi.pat_offset()));  // reduce ensures meta variables are not in substitutions
             add_binding(v, wi.pat_offset(), t);
             wi.set_done();
             return true;
@@ -728,7 +727,7 @@ namespace euf {
         m_hopat2pat.insert(p1, p);
         m_q2hoq.insert(q, q1);
         m_hoq2q.insert(q1, q);
-        m_hopat2free_vars.insert(p1, free_vars);
+        m_hopat2free_vars.insert(p1, std::move(free_vars));
         m_ho_patterns.push_back(p1);
         m_ho_qs.push_back(q1);
         trail().push(push_back_vector(m_ho_patterns));

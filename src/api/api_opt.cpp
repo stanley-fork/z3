@@ -141,7 +141,7 @@ extern "C" {
         Z3_TRY;
         LOG_Z3_optimize_check(c, o, num_assumptions, assumptions);
         RESET_ERROR_CODE();
-        for (unsigned i = 0; i < num_assumptions; i++) {
+        for (unsigned i = 0; i < num_assumptions; ++i) {
             if (!is_expr(to_ast(assumptions[i]))) {
                 SET_ERROR_CODE(Z3_INVALID_ARG, "assumption is not an expression");
                 return Z3_L_UNDEF;
@@ -432,7 +432,7 @@ extern "C" {
         unsigned n = to_optimize_ptr(o)->num_objectives();
         Z3_ast_vector_ref * v = alloc(Z3_ast_vector_ref, *mk_c(c), mk_c(c)->m());
         mk_c(c)->save_object(v);
-        for (unsigned i = 0; i < n; i++) {
+        for (unsigned i = 0; i < n; ++i) {
             v->m_ast_vector.push_back(to_optimize_ptr(o)->get_objective(i));
         }
         RETURN_Z3(of_ast_vector(v));
@@ -479,6 +479,24 @@ extern "C" {
         }
         to_optimize_ptr(o)->initialize_value(to_expr(var), to_expr(value));
         Z3_CATCH;        
+    }
+
+    Z3_optimize Z3_API Z3_optimize_translate(Z3_context c, Z3_optimize o, Z3_context target) {
+        Z3_TRY;
+        LOG_Z3_optimize_translate(c, o, target);
+        RESET_ERROR_CODE();
+        
+        // Translate the opt::context to the target manager
+        opt::context* translated_ctx = to_optimize_ptr(o)->translate(mk_c(target)->m());
+        
+        // Create a new Z3_optimize_ref in the target context
+        Z3_optimize_ref* result_ref = alloc(Z3_optimize_ref, *mk_c(target));
+        result_ref->m_opt = translated_ctx;
+        mk_c(target)->save_object(result_ref);
+        
+        Z3_optimize result = of_optimize(result_ref);
+        RETURN_Z3(result);
+        Z3_CATCH_RETURN(nullptr);
     }
 
 };

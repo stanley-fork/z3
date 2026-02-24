@@ -315,8 +315,19 @@ namespace smt {
            a truth value to all boolean variables and no inconsistency was 
            detected.
         */
-        virtual final_check_status final_check_eh() {
+        virtual final_check_status final_check_eh(unsigned level) {
             return FC_DONE;
+        }
+
+        /**
+        * \brief This method signals the number of priority levels a theory supports for final checks.
+        * The first level are for the cheapest final check invocations.
+        * The levels after that are for more expensive final checks.
+        * This approach emulates a priority queue of actions taken at final check where the expensive
+        * checks are deferred.
+        */
+        virtual unsigned num_final_check_levels() const {
+            return 1;
         }
 
         /**
@@ -417,6 +428,8 @@ namespace smt {
 
         smt_params const& get_fparams() const;
 
+        virtual void updt_params() {}
+
         enode * get_enode(theory_var v) const {
             SASSERT(v < static_cast<int>(m_var2enode.size()));
             return m_var2enode[v];
@@ -515,7 +528,7 @@ namespace smt {
             table.reset();
             bool result   = false;
             int num       = get_num_vars();
-            for (theory_var v = 0; v < num; v++) {
+            for (theory_var v = 0; v < num; ++v) {
                 enode * n        = get_enode(v);
                 theory_var other = null_theory_var;
                 TRACE(assume_eqs,

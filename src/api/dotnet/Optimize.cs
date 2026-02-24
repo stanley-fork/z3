@@ -156,7 +156,7 @@ namespace Microsoft.Z3
         /// <remarks>
         /// This API is an alternative to <see cref="Check(Expr[])"/> with assumptions for extracting unsat cores.
         /// Both APIs can be used in the same solver. The unsat core will contain a combination
-        /// of the Boolean variables provided using <see cref="AssertAndTrack(BoolExpr[],BoolExpr[])"/> 
+        /// of the Boolean variables provided using <see cref="AssertAndTrack(BoolExpr,BoolExpr)"/> 
         /// and the Boolean literals
         /// provided using <see cref="Check(Expr[])"/> with assumptions.
         /// </remarks>        
@@ -436,6 +436,16 @@ namespace Microsoft.Z3
             }
         }
 
+
+        /// <summary>
+        /// Set an initial value for a variable to guide the optimizer's search heuristics.
+        /// </summary>
+        public void SetInitialValue(Expr var, Expr value)
+        {
+            Debug.Assert(var != null);
+            Debug.Assert(value != null);
+            Native.Z3_optimize_set_initial_value(Context.nCtx, NativeObject, var.NativeObject, value.NativeObject);
+        }
 
         /// <summary>
         /// Optimize statistics.

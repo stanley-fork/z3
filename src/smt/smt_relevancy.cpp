@@ -385,7 +385,6 @@ namespace smt {
             case l_undef:
                 break;
             case l_true: {
-                expr* true_arg = nullptr;
                 auto arg0 = n->get_arg(0);
                 auto arg1 = n->get_arg(1);
                 if (m_context.find_assignment(arg0) == l_false) {
@@ -563,7 +562,7 @@ namespace smt {
         void display(std::ostream & out) const override {
             if (enabled() && !m_relevant_exprs.empty()) {
                 out << "relevant exprs:\n";
-                for (unsigned i = 0; i < m_relevant_exprs.size(); i++) {
+                for (unsigned i = 0; i < m_relevant_exprs.size(); ++i) {
                     out << "#" << m_relevant_exprs.get(i)->get_id() << " ";
                 }
                 out << "\n";
@@ -574,7 +573,7 @@ namespace smt {
         bool check_relevancy_app(app * n) const  {
             SASSERT(is_relevant(n));
             unsigned num_args = n->get_num_args();
-            for (unsigned i = 0; i < num_args; i++) {
+            for (unsigned i = 0; i < num_args; ++i) {
                 CTRACE(relevancy_bug, !is_relevant(n->get_arg(i)), tout << "n: " << mk_ismt2_pp(n, get_manager()) << "\ni: " << i << "\n";);
                 SASSERT(is_relevant(n->get_arg(i)));
             }
@@ -587,7 +586,7 @@ namespace smt {
                 return check_relevancy_app(n);
             if (val == l_true) {
                 unsigned num_args = n->get_num_args();
-                for (unsigned i = 0; i < num_args; i++) {
+                for (unsigned i = 0; i < num_args; ++i) {
                     expr * arg = n->get_arg(i);
                     if (m_context.find_assignment(arg) == l_true && is_relevant(arg))
                         return true;
@@ -604,7 +603,7 @@ namespace smt {
                 return check_relevancy_app(n);
             if (val == l_false) {
                 unsigned num_args = n->get_num_args();
-                for (unsigned i = 0; i < num_args; i++) {
+                for (unsigned i = 0; i < num_args; ++i) {
                     expr * arg = n->get_arg(i);
                     if (m_context.find_assignment(arg) == l_false && is_relevant(arg))
                         return true;
@@ -648,7 +647,7 @@ namespace smt {
             SASSERT(!can_propagate());
             ast_manager & m = get_manager();
             unsigned sz = v.size();
-            for (unsigned i = 0; i < sz; i++) {
+            for (unsigned i = 0; i < sz; ++i) {
                 expr * n    = v.get(i);
                 if (is_relevant(n)) {
                     TRACE(check_relevancy, tout << "checking:\n" << mk_ll_pp(n, get_manager()) << "internalized: " << m_context.find_enode(n) << "\n";);

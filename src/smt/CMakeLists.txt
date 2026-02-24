@@ -49,7 +49,6 @@ z3_add_component(smt
     smt_value_sort.cpp
     smt2_extra_cmds.cpp
     theory_arith.cpp
-    theory_array_bapa.cpp
     theory_array_base.cpp
     theory_array.cpp
     theory_array_full.cpp
@@ -57,6 +56,8 @@ z3_add_component(smt
     theory_char.cpp
     theory_datatype.cpp
     theory_dense_diff_logic.cpp
+    theory_finite_set.cpp
+    theory_finite_set_size.cpp
     theory_diff_logic.cpp
     theory_dl.cpp
     theory_dummy.cpp

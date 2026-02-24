@@ -63,7 +63,7 @@ namespace smt {
     app * theory_fpa::fpa_value_proc::mk_value(model_generator & mg, expr_ref_vector const & values) {
         TRACE(t_fpa_detail,
               ast_manager & m = m_th.get_manager();
-              for (unsigned i = 0; i < values.size(); i++)
+              for (unsigned i = 0; i < values.size(); ++i)
                   tout << "value[" << i << "] = " << mk_ismt2_pp(values[i], m) << std::endl;);
 
         mpf_manager & mpfm = m_fu.fm();
@@ -140,7 +140,7 @@ namespace smt {
 
         TRACE(t_fpa_detail,
               ast_manager & m = m_th.get_manager();
-              for (unsigned i = 0; i < values.size(); i++)
+              for (unsigned i = 0; i < values.size(); ++i)
               tout << "value[" << i << "] = " << mk_ismt2_pp(values[i], m) << std::endl;);
 
         app * result = nullptr;
@@ -414,6 +414,12 @@ namespace smt {
     void theory_fpa::pop_scope_eh(unsigned num_scopes) {
         m_trail_stack.pop_scope(num_scopes);
         TRACE(t_fpa, tout << "pop " << num_scopes << "; now " << m_trail_stack.get_num_scopes() << "\n";);
+        // Reset the fpa2bv rewriter cache so that expressions re-converted after
+        // a pop regenerate their side conditions (extra_assertions). Without this,
+        // the rewriter returns cached results without invoking mk_uf/mk_const and
+        // the axioms connecting FP UFs to their BV counterparts are never re-emitted,
+        // causing a soundness issue in incremental mode.
+        m_rw.reset();
         theory::pop_scope_eh(num_scopes);
     }
 
@@ -455,8 +461,7 @@ namespace smt {
                     SASSERT(to_app(bv_val_e)->get_num_args() == 3);
                     app_ref bv_val_a(m);
                     bv_val_a = to_app(bv_val_e.get());
-                    expr * args[] = { bv_val_a->get_arg(0), bv_val_a->get_arg(1), bv_val_a->get_arg(2) };
-                    cc_args = m_bv_util.mk_concat(3, args);
+                    cc_args = m_bv_util.mk_concat({bv_val_a->get_arg(0), bv_val_a->get_arg(1), bv_val_a->get_arg(2)});
                     c = m.mk_eq(wrapped, cc_args);
                     assert_cnstr(c);
                     assert_cnstr(mk_side_conditions());
@@ -501,7 +506,7 @@ namespace smt {
         theory::reset_eh();
     }
 
-    final_check_status theory_fpa::final_check_eh() {
+    final_check_status theory_fpa::final_check_eh(unsigned level) {
         TRACE(t_fpa, tout << "final_check_eh\n";);
         SASSERT(m_converter.m_extra_assertions.empty());
         return FC_DONE;
@@ -630,12 +635,12 @@ namespace smt {
         for (func_decl* f : seen)
             mdl.unregister_decl(f);
 
-        for (unsigned i = 0; i < new_model.get_num_constants(); i++) {
+        for (unsigned i = 0; i < new_model.get_num_constants(); ++i) {
             func_decl * f = new_model.get_constant(i);
             mdl.register_decl(f, new_model.get_const_interp(f));
         }
 
-        for (unsigned i = 0; i < new_model.get_num_functions(); i++) {
+        for (unsigned i = 0; i < new_model.get_num_functions(); ++i) {
             func_decl * f = new_model.get_function(i);
             func_interp * fi = new_model.get_func_interp(f)->copy();
             mdl.register_decl(f, fi);

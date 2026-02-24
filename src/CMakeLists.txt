@@ -1,30 +1,4 @@
 ################################################################################
-# API header files
-################################################################################
-# This lists the API header files that are scanned by
-# some of the build rules to generate some files needed
-# by the build
-set(Z3_API_HEADER_FILES_TO_SCAN
-  z3_api.h
-  z3_ast_containers.h
-  z3_algebraic.h
-  z3_polynomial.h
-  z3_rcf.h
-  z3_fixedpoint.h
-  z3_optimization.h
-  z3_fpa.h
-  z3_spacer.h
-)
-set(Z3_FULL_PATH_API_HEADER_FILES_TO_SCAN "")
-foreach (header_file ${Z3_API_HEADER_FILES_TO_SCAN})
-  set(full_path_api_header_file "${CMAKE_CURRENT_SOURCE_DIR}/api/${header_file}")
-  list(APPEND Z3_FULL_PATH_API_HEADER_FILES_TO_SCAN "${full_path_api_header_file}")
-  if (NOT EXISTS "${full_path_api_header_file}")
-    message(FATAL_ERROR "API header file \"${full_path_api_header_file}\" does not exist")
-  endif()
-endforeach()
-
-################################################################################
 # Traverse directories each adding a Z3 component
 ################################################################################
 # I'm duplicating the order in ``mk_project.py`` for now to help us keep
@@ -160,6 +134,10 @@ if (CMAKE_SYSTEM_NAME STREQUAL "Darwin")
     # Enable RPATH support
     MACOSX_RPATH TRUE
   )
+  # Add header padding to allow install_name_tool to modify the dylib
+  # This fixes issues where install_name_tool fails with "larger updated load commands do not fit"
+  # See: https://github.com/Z3Prover/z3/issues/7623
+  target_link_options(libz3 PRIVATE "-Wl,-headerpad_max_install_names")
 endif()
 
 if (NOT MSVC)
@@ -176,6 +154,11 @@ endif()
 # shared library the dependent libraries are specified on the link command line
 # so that if those are also shared libraries they are referenced by `libz3.so`.
 target_link_libraries(libz3 PRIVATE ${Z3_DEPENDENT_LIBS})
+
+# On macOS, add headerpad for install_name_tool compatibility
+if(CMAKE_SYSTEM_NAME STREQUAL "Darwin" AND Z3_BUILD_LIBZ3_SHARED)
+  target_link_options(libz3 PRIVATE "-Wl,-headerpad_max_install_names")
+endif()
 
 ################################################################################
 # Create include directory with headers for easier developer integration
@@ -305,7 +288,7 @@ endif()
 ################################################################################
 cmake_dependent_option(Z3_BUILD_EXECUTABLE
     "Build the z3 executable" ON
-    "CMAKE_SOURCE_DIR STREQUAL PROJECT_SOURCE_DIR" OFF)
+    "CMAKE_SOURCE_DIR STREQUAL PROJECT_SOURCE_DIR;Z3_BUILD_LIBZ3_CORE" OFF)
 
 if (Z3_BUILD_EXECUTABLE)
     add_subdirectory(shell)
@@ -317,24 +300,11 @@ endif()
 
 cmake_dependent_option(Z3_BUILD_TEST_EXECUTABLES
     "Build test executables" ON
-    "CMAKE_SOURCE_DIR STREQUAL PROJECT_SOURCE_DIR" OFF)
+    "CMAKE_SOURCE_DIR STREQUAL PROJECT_SOURCE_DIR;Z3_BUILD_LIBZ3_CORE" OFF)
 
 
 if (Z3_BUILD_TEST_EXECUTABLES)
     add_subdirectory(test)
-endif()
-
-
-################################################################################
-# Z3 API bindings
-################################################################################
-option(Z3_BUILD_PYTHON_BINDINGS "Build Python bindings for Z3" OFF)
-if (Z3_BUILD_PYTHON_BINDINGS)
-  if (NOT Z3_BUILD_LIBZ3_SHARED)
-    message(FATAL_ERROR "The python bindings will not work with a static libz3. "
-            "You either need to disable Z3_BUILD_PYTHON_BINDINGS or enable Z3_BUILD_LIBZ3_SHARED")
-  endif()
-  add_subdirectory(api/python)
 endif()
 
 ################################################################################
@@ -383,6 +353,18 @@ if (Z3_BUILD_JULIA_BINDINGS)
       "You either need to disable Z3_BUILD_JULIA_BINDINGS or enable Z3_BUILD_LIBZ3_SHARED")
   endif()
   add_subdirectory(api/julia)
+endif()
+
+################################################################################
+# Go bindings
+################################################################################
+option(Z3_BUILD_GO_BINDINGS "Build Go bindings for Z3" OFF)
+if (Z3_BUILD_GO_BINDINGS)
+  if (NOT Z3_BUILD_LIBZ3_SHARED)
+    message(FATAL_ERROR "The Go bindings will not work with a static libz3. "
+      "You either need to disable Z3_BUILD_GO_BINDINGS or enable Z3_BUILD_LIBZ3_SHARED")
+  endif()
+  add_subdirectory(api/go)
 endif()
 
 # TODO: Implement support for other bindigns
