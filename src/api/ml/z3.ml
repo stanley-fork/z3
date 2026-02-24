@@ -1955,6 +1955,7 @@ struct
   let add_simplifier = Z3native.solver_add_simplifier
   let translate x = Z3native.solver_translate (gc x) x
   let to_string x = Z3native.solver_to_string (gc x) x
+  let to_dimacs x include_names = Z3native.solver_to_dimacs_string (gc x) x include_names
 
   let interrupt (ctx:context) (s:solver) =
     Z3native.solver_interrupt ctx s
@@ -2145,6 +2146,7 @@ struct
   let from_string (x:optimize) (s:string) = Z3native.optimize_from_string (gc x) x s
   let get_assertions (x:optimize) = AST.ASTVector.to_expr_list (Z3native.optimize_get_assertions (gc x) x)
   let get_objectives (x:optimize) = AST.ASTVector.to_expr_list (Z3native.optimize_get_objectives (gc x) x)
+  let translate (x:optimize) (to_ctx:context) = Z3native.optimize_translate (gc x) x to_ctx
 end
 
 

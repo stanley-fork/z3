@@ -3428,6 +3428,10 @@ sig
   (** A string representation of the solver. *)
   val to_string : solver -> string
 
+  (** Convert the solver's Boolean formula to DIMACS CNF format.
+      @param include_names If true, include variable names in the output. *)
+  val to_dimacs : solver -> bool -> string
+
   (** Solver local interrupt.
 
       Normally you should use Z3_interrupt to cancel solvers because only
@@ -3665,6 +3669,9 @@ sig
       corresponding minimization objective. In this way the resulting
       objective function is always returned as a minimization objective. *)
   val get_objectives : optimize -> Expr.expr list
+
+  (** Translate the optimize context to a different context. *)
+  val translate : optimize -> context -> optimize
 end
 
 

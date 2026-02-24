@@ -357,6 +357,47 @@ func (dst *Solver) ImportModelConverter(src *Solver) {
 	C.Z3_solver_import_model_converter(dst.ctx.ptr, src.ptr, dst.ptr)
 }
 
+// Translate creates a copy of the solver in the target context.
+// This is useful when working with multiple Z3 contexts.
+func (s *Solver) Translate(target *Context) *Solver {
+	ptr := C.Z3_solver_translate(s.ctx.ptr, s.ptr, target.ptr)
+	newSolver := &Solver{ctx: target, ptr: ptr}
+	C.Z3_solver_inc_ref(target.ptr, ptr)
+	runtime.SetFinalizer(newSolver, func(solver *Solver) {
+		C.Z3_solver_dec_ref(solver.ctx.ptr, solver.ptr)
+	})
+	return newSolver
+}
+
+// GetProof returns the proof of unsatisfiability from the last check.
+// Returns nil if no proof is available (e.g. the result was not UNSAT,
+// or proof production is disabled).
+func (s *Solver) GetProof() *Expr {
+	result := C.Z3_solver_get_proof(s.ctx.ptr, s.ptr)
+	if result == nil {
+		return nil
+	}
+	return newExpr(s.ctx, result)
+}
+
+// AddSimplifier creates a new solver with the given simplifier attached for
+// pre-processing assertions before solving.
+func (s *Solver) AddSimplifier(simplifier *Simplifier) *Solver {
+	ptr := C.Z3_solver_add_simplifier(s.ctx.ptr, s.ptr, simplifier.ptr)
+	newSolver := &Solver{ctx: s.ctx, ptr: ptr}
+	C.Z3_solver_inc_ref(s.ctx.ptr, ptr)
+	runtime.SetFinalizer(newSolver, func(solver *Solver) {
+		C.Z3_solver_dec_ref(solver.ctx.ptr, solver.ptr)
+	})
+	return newSolver
+}
+
+// Dimacs converts the solver's Boolean formula to DIMACS CNF format.
+// If includeNames is true, variable names are included in the output.
+func (s *Solver) Dimacs(includeNames bool) string {
+	return C.GoString(C.Z3_solver_to_dimacs_string(s.ctx.ptr, s.ptr, C.bool(includeNames)))
+}
+
 // Model represents a Z3 model (satisfying assignment).
 type Model struct {
 	ctx *Context
