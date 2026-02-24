@@ -1478,14 +1478,36 @@ export interface Optimize<Name extends string = 'main'> {
   /**
    * Add a maximization objective.
    * @param expr - The expression to maximize
-   * @returns A numeric handle index that can be used to retrieve bounds via {@link getLower}/{@link getUpper}
+   * @returns A zero-based numeric handle index for this objective, used to retrieve bounds
+   *          via {@link getLower}/{@link getUpper} after calling {@link check}
+   *
+   * @example
+   * ```typescript
+   * const opt = new Optimize();
+   * const x = Int.const('x');
+   * opt.add(x.ge(0), x.le(10));
+   * const h = opt.maximize(x);
+   * await opt.check();
+   * console.log('Max x:', opt.getUpper(h).toString()); // '10'
+   * ```
    */
   maximize(expr: Arith<Name> | BitVec<number, Name>): number;
 
   /**
    * Add a minimization objective.
    * @param expr - The expression to minimize
-   * @returns A numeric handle index that can be used to retrieve bounds via {@link getLower}/{@link getUpper}
+   * @returns A zero-based numeric handle index for this objective, used to retrieve bounds
+   *          via {@link getLower}/{@link getUpper} after calling {@link check}
+   *
+   * @example
+   * ```typescript
+   * const opt = new Optimize();
+   * const x = Int.const('x');
+   * opt.add(x.ge(0), x.le(10));
+   * const h = opt.minimize(x);
+   * await opt.check();
+   * console.log('Min x:', opt.getLower(h).toString()); // '0'
+   * ```
    */
   minimize(expr: Arith<Name> | BitVec<number, Name>): number;
 

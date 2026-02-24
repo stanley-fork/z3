@@ -2142,7 +2142,7 @@ export function createApi(Z3: Z3Core): Z3HighLevel {
       proof(): Expr<Name> | null {
         const result = Z3.solver_get_proof(contextPtr, this.ptr);
         throwIfError();
-        if (result === null) {
+        if (!result) {
           return null;
         }
         return _toExpr(result);
