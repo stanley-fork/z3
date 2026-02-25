@@ -77,22 +77,6 @@ namespace nlsat {
 
         assignment const& sample() const { return m_solver.sample(); }
 
-        // Utility: call fn for each distinct irreducible factor of poly
-        template <typename Func>
-        void for_each_distinct_factor(polynomial_ref const& poly_in, Func&& fn) {
-            if (!poly_in || is_zero(poly_in) || is_const(poly_in))
-                return;
-            polynomial_ref poly(poly_in);
-            polynomial_ref_vector factors(m_pm);
-            ::nlsat::factor(poly, m_cache, factors);
-            for (unsigned i = 0; i < factors.size(); ++i) {
-                polynomial_ref f(factors.get(i), m_pm);
-                if (!f || is_zero(f) || is_const(f))
-                    continue;
-                fn(f);
-            }
-        }
-
         struct root_function {
             scoped_anum       val;
             indexed_root_expr ire;
@@ -375,13 +359,19 @@ namespace nlsat {
             return polynomial_ref(m_pm);
         }
 
-        void request_factorized(polynomial_ref const& poly) {
-            for_each_distinct_factor(poly, [&](polynomial_ref const& f) {
-                TRACE(lws,
-                      m_pm.display(tout << "      request_factorized: factor=", f) << " at level " << m_pm.max_var(f) << "\n";
-                    );
+        void request_factorized(polynomial_ref & poly) {
+            if (!poly || is_zero(poly) || is_const(poly))
+                return;
+            polynomial_ref_vector factors(m_pm);
+            ::nlsat::factor(poly, m_cache, factors);
+            for (unsigned i = 0; i < factors.size(); ++i) {
+                polynomial_ref f(factors.get(i), m_pm);
+                if (!f || is_zero(f) || is_const(f))
+                    continue;
+                TRACE(lws, m_pm.display(tout << "f:", f)<< ",";);
                 m_todo.insert(f.get());
-            });
+            }
+            
         }
 
         // Select a coefficient c of p (wrt x) such that c(s) != 0, or return null.
@@ -433,7 +423,7 @@ namespace nlsat {
         }
 
         
-        void add_projection_for_poly(polynomial_ref const& p, unsigned x, polynomial_ref const& nonzero_coeff, bool add_leading_coeff, bool add_discriminant) {
+        void add_projection_for_poly(polynomial_ref const& p, unsigned x, polynomial_ref & nonzero_coeff, bool add_leading_coeff, bool add_discriminant) {
                TRACE(lws,
                   m_pm.display(tout << "  add_projection_for_poly: p=", p)
                       << " x=" << x << " add_lc=" << add_leading_coeff << " add_disc=" << add_discriminant << "\n";
@@ -1109,7 +1099,8 @@ namespace nlsat {
                 TRACE(lws,
                       m_pm.display(m_pm.display(tout << "  Adjacent resultant pair: ", p1) << " and ", p2) << "\n";
                     );
-                request_factorized(psc_resultant(p1, p2, m_n));
+                polynomial_ref res = psc_resultant(p1, p2, m_n);
+                request_factorized(res);
             }
         }
 
