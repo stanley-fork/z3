@@ -97,7 +97,7 @@ For each selected API family:
    - **C++**: Use grep/glob to search for function declarations in `z3++.h`
    - **OCaml**: Use grep/glob to search for function definitions in `.ml` and `.mli` files
    - **Go**: Use grep/glob to search for function and method definitions in `src/api/go/*.go` files
-   - **Rust**: Clone the external repo (`git clone --depth=1 https://github.com/prove-rs/z3.rs /tmp/z3.rs`) and use grep/glob to search for public types, methods, and functions in `/tmp/z3.rs/z3/src/*.rs`
+   - **Rust**: Clone the external repo (`git clone --depth=1 https://github.com/prove-rs/z3.rs /tmp/z3.rs`) and use grep/glob to search for public types, methods, functions, traits, and trait implementations in `/tmp/z3.rs/z3/src/*.rs`. Note that trait implementations (`impl Trait for Type`) do not use the `pub` keyword in Rust but are as public as the type and trait themselves, so search for `impl ` patterns in addition to `pub ` patterns to find them.
 
 3. **Compare implementations** across languages:
    - Is the same functionality available in all languages?
