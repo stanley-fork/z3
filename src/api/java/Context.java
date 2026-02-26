@@ -1999,7 +1999,8 @@ public class Context implements AutoCloseable {
                 Native.mkArrayDefault(nCtx(), array.getNativeObject()));
     }
 
-    /**                                                                                                                                                                                                          * Create an as-array expression from a function declaration.
+    /**
+     * Create an as-array expression from a function declaration.
      * @param f the function declaration to lift into an array.
      *          Must have exactly one domain sort.
      * @see #mkTermArray(Expr)
@@ -2010,7 +2011,6 @@ public class Context implements AutoCloseable {
         checkContextMatch(f);
         return (ArrayExpr<D, R>) Expr.create(this, Native.mkAsArray(nCtx(), f.getNativeObject()));
     }
-
 
     /**
      * Create Extentionality index. Two arrays are equal if and only if they are equal on the index returned by MkArrayExt.

@@ -657,7 +657,8 @@ namespace Microsoft.Z3
         /// <returns>A string containing the DIMACS CNF representation.</returns>
         public string ToDimacs(bool includeNames = true)
         {
-            return Native.Z3_solver_to_dimacs_string(Context.nCtx, NativeObject, includeNames ? (byte)1 : (byte)0);
+            byte includeNamesByte = includeNames ? (byte)1 : (byte)0;
+            return Native.Z3_solver_to_dimacs_string(Context.nCtx, NativeObject, includeNamesByte);
         }
 
         #region Internal
