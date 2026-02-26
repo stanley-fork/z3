@@ -121,6 +121,67 @@ Also scan the build log for warnings and errors:
 grep -E "(warning|error|bug).*\[.*\]" /tmp/csa-build.log | head -100
 ```
 
+### 4.5 Extract Report Content to Text
+
+Extract the full CSA report content into a plain-text file so it can be embedded directly in the GitHub Discussion:
+
+```bash
+python3 - << 'PYEOF' > /tmp/csa-extracted.txt 2>&1
+import os
+import re
+import glob
+import sys
+
+report_dir = '/tmp/csa-report'
+if not os.path.isdir(report_dir):
+    print('No CSA report directory found.')
+    sys.exit(0)
+
+subdirs = sorted([d for d in os.listdir(report_dir) if os.path.isdir(os.path.join(report_dir, d))])
+if not subdirs:
+    print('No scan-build output subdirectory found.')
+    sys.exit(0)
+
+subdir = os.path.join(report_dir, subdirs[-1])
+index_path = os.path.join(subdir, 'index.html')
+
+if os.path.exists(index_path):
+    with open(index_path) as f:
+        content = f.read()
+    print('## Summary Table\n')
+    rows = re.findall(r'<tr[^>]*>(.*?)</tr>', content, re.DOTALL)
+    for row in rows:
+        cells = re.findall(r'<td[^>]*>(.*?)</td>', row, re.DOTALL)
+        if cells:
+            clean = [re.sub(r'<[^>]+>', '', c).strip() for c in cells]
+            line = ' | '.join(c for c in clean if c)
+            if line:
+                print(line)
+    print()
+
+report_files = sorted(glob.glob(os.path.join(subdir, 'report-*.html')))
+if report_files:
+    print(f'## Individual Findings ({len(report_files)} total)\n')
+    for i, rfile in enumerate(report_files, 1):
+        with open(rfile) as f:
+            rcontent = f.read()
+        checker = re.search(r'<td class="CHECKER">(.*?)</td>', rcontent, re.DOTALL)
+        filename = re.search(r'<td class="FILENAME">(.*?)</td>', rcontent, re.DOTALL)
+        lineno = re.search(r'<td class="LINE">(.*?)</td>', rcontent, re.DOTALL)
+        desc = re.search(r'<td class="DESC">(.*?)</td>', rcontent, re.DOTALL)
+        c = re.sub(r'<[^>]+>', '', checker.group(1)).strip() if checker else 'unknown'
+        fn = re.sub(r'<[^>]+>', '', filename.group(1)).strip() if filename else 'unknown'
+        ln = re.sub(r'<[^>]+>', '', lineno.group(1)).strip() if lineno else '?'
+        d = re.sub(r'<[^>]+>', '', desc.group(1)).strip() if desc else ''
+        print(f'{i}. [{c}] {d}')
+        print(f'   File: {fn}, Line: {ln}')
+        print()
+else:
+    print('No individual report files found.')
+PYEOF
+cat /tmp/csa-extracted.txt
+```
+
 ### 5. Categorize Findings
 
 Analyze the CSA findings and group them by:
@@ -196,6 +257,15 @@ Create a GitHub Discussion with a structured report. The discussion title should
 ## Top Affected Files
 
 [Table or list of files with the most findings]
+
+## Full CSA Report Content
+
+<details>
+<summary>Complete findings extracted from the CSA HTML report (click to expand)</summary>
+
+[PASTE THE ENTIRE CONTENTS OF /tmp/csa-extracted.txt HERE verbatim — do not summarize or paraphrase]
+
+</details>
 
 ## Build Log Excerpt
 
