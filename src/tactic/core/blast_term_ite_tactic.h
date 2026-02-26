@@ -48,11 +48,8 @@ Use `elim-term-ite` elsewhere when possible.
 #include "tactic/tactic.h"
 #include "tactic/dependent_expr_state_tactic.h"
 #include "ast/simplifiers/blast_term_ite_simplifier.h"
-class ast_manager;
 
-tactic * mk_blast_term_ite_tactic(ast_manager & m, params_ref const & p = params_ref());
-
-inline tactic * mk_blast_term_ite2_tactic(ast_manager & m, params_ref const & p = params_ref()) {
+inline tactic * mk_blast_term_ite_tactic(ast_manager & m, params_ref const & p = params_ref()) {
     return alloc(dependent_expr_state_tactic, m, p,
         [](auto& m, auto& p, auto& s) -> dependent_expr_simplifier* {
             return alloc(blast_term_ite_simplifier, m, p, s);
@@ -61,7 +58,6 @@ inline tactic * mk_blast_term_ite2_tactic(ast_manager & m, params_ref const & p 
 
 /*
     ADD_TACTIC("blast-term-ite", "blast term if-then-else by hoisting them.", "mk_blast_term_ite_tactic(m, p)")
-    ADD_TACTIC("blast-term-ite2", "blast term if-then-else by hoisting them.", "mk_blast_term_ite2_tactic(m, p)")
     ADD_SIMPLIFIER("blast-term-ite", "blast term if-then-else by hoisting them.", "alloc(blast_term_ite_simplifier, m, p, s)")
 */
 

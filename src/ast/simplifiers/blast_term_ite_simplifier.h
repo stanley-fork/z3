@@ -15,6 +15,7 @@ Author:
 
 #include "ast/simplifiers/dependent_expr_state.h"
 #include "ast/rewriter/rewriter_def.h"
+#include "ast/scoped_proof.h"
 #include "params/tactic_params.hpp"
 
 
@@ -114,6 +115,24 @@ public:
             m_rw(d.fml(), new_fml, new_pr);
             if (d.fml() != new_fml)
                 m_fmls.update(idx, dependent_expr(m, new_fml, mp(d.pr(), new_pr), d.dep()));
+        }
+    }
+
+    static void blast_term_ite(expr_ref& fml, unsigned max_inflation) {
+        ast_manager& m = fml.get_manager();
+        scoped_no_proof _sp(m);
+        params_ref p;
+        rw ite_rw(m, p);
+        ite_rw.m_cfg.m_max_inflation = max_inflation;
+        if (max_inflation < UINT_MAX)
+            ite_rw.m_cfg.m_init_term_size = get_num_exprs(fml);
+        try {
+            expr_ref tmp(m);
+            ite_rw(fml, tmp);
+            fml = tmp;
+        }
+        catch (z3_exception &) {
+            // max steps exceeded.
         }
     }
 };
