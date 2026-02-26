@@ -1,6 +1,7 @@
 z3_add_component(simplifiers
   SOURCES
     bit_blaster.cpp
+    bv1_blaster.cpp
     bound_manager.cpp
     bound_propagator.cpp
     bound_simplifier.cpp
@@ -32,6 +33,7 @@ z3_add_component(simplifiers
     substitution
   TACTIC_HEADERS
     bit_blaster.h
+    bv1_blaster.h
     bit2int.h
     blast_term_ite_simplifier.h
     elim_bounds.h
