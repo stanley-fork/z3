@@ -152,7 +152,7 @@ function isCoercibleRational(obj: any): obj is CoercibleRational {
   return r;
 }
 
-export function createApi(Z3: Z3Core): Z3HighLevel {
+export function createApi(Z3: Z3Core, em?: any): Z3HighLevel {
   // TODO(ritave): Create a custom linting rule that checks if the provided callbacks to cleanup
   //               Don't capture `this`
   const cleanup = new FinalizationRegistry<() => void>(callback => callback());
@@ -1998,6 +1998,8 @@ export function createApi(Z3: Z3Core): Z3HighLevel {
 
       readonly ctx: Context<Name>;
       private _ptr: Z3_solver | null;
+      // Tracks a registered on_clause WASM callback index so it can be cleaned up
+      private _onClauseCallbackIdx!: { value: number | null };
       get ptr(): Z3_solver {
         _assertPtr(this._ptr);
         return this._ptr;
@@ -2013,7 +2015,20 @@ export function createApi(Z3: Z3Core): Z3HighLevel {
         }
         this._ptr = myPtr;
         Z3.solver_inc_ref(contextPtr, myPtr);
-        cleanup.register(this, () => Z3.solver_dec_ref(contextPtr, myPtr), this);
+        // Shared mutable holder so registerOnClause and the cleanup closure see the same slot
+        const onClauseCallbackIdx: { value: number | null } = { value: null };
+        this._onClauseCallbackIdx = onClauseCallbackIdx;
+        cleanup.register(
+          this,
+          () => {
+            Z3.solver_dec_ref(contextPtr, myPtr);
+            if (onClauseCallbackIdx.value !== null && em) {
+              em.removeFunction(onClauseCallbackIdx.value);
+              onClauseCallbackIdx.value = null;
+            }
+          },
+          this,
+        );
       }
 
       set(key: string, value: any): void {
@@ -2260,10 +2275,45 @@ export function createApi(Z3: Z3Core): Z3HighLevel {
       }
 
       release() {
+        // Clean up any registered on_clause callback
+        if (this._onClauseCallbackIdx.value !== null && em) {
+          em.removeFunction(this._onClauseCallbackIdx.value);
+          this._onClauseCallbackIdx.value = null;
+        }
         Z3.solver_dec_ref(contextPtr, this.ptr);
         // Mark the ptr as null to prevent double free
         this._ptr = null;
         cleanup.unregister(this);
+      }
+
+      registerOnClause(
+        callback: (proofHint: Expr<Name> | null, deps: number[], clause: AstVector<Name, Bool<Name>>) => void,
+      ): void {
+        if (!em) {
+          throw new Error('registerOnClause requires the Emscripten module; pass it to createApi');
+        }
+        // Remove any previously registered callback before registering a new one
+        if (this._onClauseCallbackIdx.value !== null) {
+          em.removeFunction(this._onClauseCallbackIdx.value);
+          this._onClauseCallbackIdx.value = null;
+        }
+        // Signature: void(void* ctx, Z3_ast proof_hint, unsigned n, const unsigned* deps, Z3_ast_vector literals)
+        const cCallback = em.addFunction(
+          (_ctxPtr: number, proofHintPtr: number, n: number, depsPtr: number, literalsPtr: number) => {
+            const proofHint = proofHintPtr ? _toExpr(proofHintPtr as unknown as Z3_ast) : null;
+            const deps: number[] = [];
+            for (let i = 0; i < n; i++) {
+              deps.push(em.HEAPU32[(depsPtr >> 2) + i]);
+            }
+            const clause = new AstVectorImpl(literalsPtr as unknown as Z3_ast_vector) as AstVector<Name, Bool<Name>>;
+            callback(proofHint, deps, clause);
+          },
+          'viiiii',
+        );
+        this._onClauseCallbackIdx.value = cCallback;
+        // solver_register_on_clause is not auto-wrapped (has void* and fnptr params),
+        // so we call the raw Emscripten export directly.
+        em._Z3_solver_register_on_clause(contextPtr as unknown as number, this.ptr as unknown as number, 0, cCallback);
       }
     }
 
