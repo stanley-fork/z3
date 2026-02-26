@@ -2023,6 +2023,9 @@ sig
   (** regular expression for the range between two characters *)
   val mk_re_range : context -> Expr.expr -> Expr.expr -> Expr.expr
 
+  (** the regular expression matching any single character of the given sort *)
+  val mk_re_allchar : context -> Sort.sort -> Expr.expr
+
   (** bounded loop regular expression *)
   val mk_re_loop : context -> Expr.expr -> int -> int -> Expr.expr
 

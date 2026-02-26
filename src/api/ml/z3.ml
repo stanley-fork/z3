@@ -1298,6 +1298,7 @@ struct
   let mk_re_union ctx args = Z3native.mk_re_union ctx (List.length args) args
   let mk_re_concat ctx args = Z3native.mk_re_concat ctx (List.length args) args
   let mk_re_range = Z3native.mk_re_range
+  let mk_re_allchar = Z3native.mk_re_allchar
   let mk_re_loop = Z3native.mk_re_loop
   let mk_re_intersect ctx args = Z3native.mk_re_intersect ctx (List.length args) args
   let mk_re_complement = Z3native.mk_re_complement
