@@ -21,10 +21,12 @@ static void test_fp_to_real_denormal() {
     ctx = Z3_mk_context(nullptr);
     {
         const char * spec =
+            "(set-option :model_validate true)\n"
             "(assert (> (fp.to_real (fp #b0 #b00 #b00111011011111001011101)) 1.0))\n"
             "(check-sat)\n";
         const char * result = Z3_eval_smtlib2_string(ctx, spec);
         ENSURE(strstr(result, "unsat") != nullptr);
+        ENSURE(strstr(result, "invalid") == nullptr);
     }
     Z3_del_context(ctx);
 
@@ -33,11 +35,13 @@ static void test_fp_to_real_denormal() {
     ctx = Z3_mk_context(nullptr);
     {
         const char * spec =
+            "(set-option :model_validate true)\n"
             "(assert (= (fp.to_real (fp #b0 #b00 #b10000000000000000000000)) (/ 1.0 2.0)))\n"
             "(check-sat)\n";
         const char * result = Z3_eval_smtlib2_string(ctx, spec);
         ENSURE(strstr(result, "sat") != nullptr);
         ENSURE(strstr(result, "unsat") == nullptr);
+        ENSURE(strstr(result, "invalid") == nullptr);
     }
     Z3_del_context(ctx);
 
@@ -46,11 +50,13 @@ static void test_fp_to_real_denormal() {
     ctx = Z3_mk_context(nullptr);
     {
         const char * spec =
+            "(set-option :model_validate true)\n"
             "(assert (= (fp.to_real (fp #b0 #b00 #b00100000000000000000000)) (/ 1.0 8.0)))\n"
             "(check-sat)\n";
         const char * result = Z3_eval_smtlib2_string(ctx, spec);
         ENSURE(strstr(result, "sat") != nullptr);
         ENSURE(strstr(result, "unsat") == nullptr);
+        ENSURE(strstr(result, "invalid") == nullptr);
     }
     Z3_del_context(ctx);
 
@@ -59,11 +65,13 @@ static void test_fp_to_real_denormal() {
     ctx = Z3_mk_context(nullptr);
     {
         const char * spec =
+            "(set-option :model_validate true)\n"
             "(assert (> (fp.to_real (fp #b0 #b01 #b11111111111111111111111)) 1.0))\n"
             "(check-sat)\n";
         const char * result = Z3_eval_smtlib2_string(ctx, spec);
         ENSURE(strstr(result, "sat") != nullptr);
         ENSURE(strstr(result, "unsat") == nullptr);
+        ENSURE(strstr(result, "invalid") == nullptr);
     }
     Z3_del_context(ctx);
 }
