@@ -3499,6 +3499,13 @@ sig
       variables are the variables to solve for, terms are the substitution terms,
       and guards are Boolean guards for the substitutions. *)
   val solve_for : solver -> Expr.expr list -> Expr.expr list -> Expr.expr list -> unit
+
+  (** Register a callback that is invoked when clauses are inferred during solving.
+      The callback is called when a clause is asserted to the CDCL engine, inferred
+      by CDCL(T), or deleted by the CDCL(T) engine.
+      The callback receives an optional proof hint expression, a list of dependency
+      indices, and the inferred clause as a list of literal expressions. *)
+  val register_on_clause : solver -> (Expr.expr option -> int list -> Expr.expr list -> unit) -> unit
 end
 
 (** Fixedpoint solving *)

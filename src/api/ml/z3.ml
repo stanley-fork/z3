@@ -2020,6 +2020,11 @@ struct
     List.iter (fun e -> Z3native.ast_vector_push (gc x) term_vec e) terms;
     List.iter (fun e -> Z3native.ast_vector_push (gc x) guard_vec e) guards;
     Z3native.solver_solve_for (gc x) x var_vec term_vec guard_vec
+
+  let register_on_clause (s:solver) (callback: Expr.expr option -> int list -> Expr.expr list -> unit) =
+    Z3native.solver_register_on_clause (gc s) s (fun proof_hint deps lits ->
+      let lits_list = AST.ASTVector.to_expr_list lits in
+      callback proof_hint deps lits_list)
 end
 
 

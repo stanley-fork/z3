@@ -1422,6 +1422,24 @@ export interface Solver<Name extends string = 'main'> {
    * but calling this eagerly can help release memory sooner.
    */
   release(): void;
+
+  /**
+   * Register a callback that is invoked when clauses are inferred during solving.
+   * The callback is called when a clause is:
+   * - asserted to the CDCL engine (input clause after pre-processing)
+   * - inferred by CDCL(T) using a SAT or theory conflict/propagation
+   * - deleted by the CDCL(T) engine
+   *
+   * Requires the Emscripten module to be passed to `createApi`.
+   *
+   * @param callback - Function called with:
+   *   - proofHint: optional proof hint expression (may be null)
+   *   - deps: array of clause dependency indices
+   *   - clause: the clause as a vector of literals
+   */
+  registerOnClause(
+    callback: (proofHint: Expr<Name> | null, deps: number[], clause: AstVector<Name, Bool<Name>>) => void,
+  ): void;
 }
 
 export interface Optimize<Name extends string = 'main'> {
