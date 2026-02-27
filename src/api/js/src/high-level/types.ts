@@ -3398,6 +3398,12 @@ export interface FP<Name extends string = 'main'> extends Expr<Name, FPSort<Name
 
   /** @category Predicates */
   isPositive(): Bool<Name>;
+
+  /** @category Conversion */
+  toIEEEBV(): BitVec<number, Name>;
+
+  /** @category Conversion */
+  toReal(): Arith<Name>;
 }
 
 /**

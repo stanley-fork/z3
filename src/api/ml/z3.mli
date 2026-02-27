@@ -869,6 +869,19 @@ sig
       {!mk_select} *)
   val mk_const_array : context -> Sort.sort -> Expr.expr -> Expr.expr
 
+  (** Multi-index array read.
+
+      The node [a] must have a multi-dimensional array sort, and [idxs] is the list of indices.
+      {!mk_select} *)
+  val mk_select_n : context -> Expr.expr -> Expr.expr list -> Expr.expr
+
+  (** Multi-index array update.
+
+      The node [a] must have a multi-dimensional array sort, [idxs] is the list of indices,
+      and [v] is the value to store.
+      {!mk_store} *)
+  val mk_store_n : context -> Expr.expr -> Expr.expr list -> Expr.expr -> Expr.expr
+
   (** Maps f on the argument arrays.
 
       Each element of [args] must be of an array sort [[domain_i -> range_i]].

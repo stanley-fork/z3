@@ -4251,6 +4251,14 @@ export function createApi(Z3: Z3Core, em?: any): Z3HighLevel {
       isPositive(): Bool<Name> {
         return new BoolImpl(check(Z3.mk_fpa_is_positive(contextPtr, this.ast)));
       }
+
+      toIEEEBV(): BitVec<number, Name> {
+        return new BitVecImpl(check(Z3.mk_fpa_to_ieee_bv(contextPtr, this.ast)));
+      }
+
+      toReal(): Arith<Name> {
+        return new ArithImpl(check(Z3.mk_fpa_to_real(contextPtr, this.ast)));
+      }
     }
 
     class FPNumImpl extends FPImpl implements FPNum<Name> {
