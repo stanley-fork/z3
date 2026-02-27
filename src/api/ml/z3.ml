@@ -770,6 +770,12 @@ struct
   let mk_store = Z3native.mk_store
   let mk_const_array = Z3native.mk_const_array
 
+  let mk_select_n ctx a idxs =
+    Z3native.mk_select_n ctx a (List.length idxs) idxs
+
+  let mk_store_n ctx a idxs v =
+    Z3native.mk_store_n ctx a (List.length idxs) idxs v
+
   let mk_map ctx f args =
     Z3native.mk_map ctx f (List.length args) args
 
