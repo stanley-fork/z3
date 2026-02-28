@@ -162,18 +162,18 @@ namespace opt {
         struct add_def : public def {
             def* x, *y;
             add_def(def* x, def* y) : x(x), y(y) { m_type = add_t;  x->inc_ref(); y->inc_ref(); }
-            ~add_def() { x->dec_ref(); y->dec_ref(); }
+            ~add_def() override { x->dec_ref(); y->dec_ref(); }
         };
         struct mul_def : public def {
             def* x, *y;
             mul_def(def* x, def* y) : x(x), y(y) { m_type = mul_t;  x->inc_ref(); y->inc_ref(); }
-            ~mul_def() { x->dec_ref(); y->dec_ref(); }
+            ~mul_def() override { x->dec_ref(); y->dec_ref(); }
         };
         struct div_def : public def {
             def* x;
             rational m_div{ 1 };
             div_def(def* x, rational const& d) : x(x), m_div(d) { m_type = div_t; x->inc_ref(); }
-            ~div_def() { x->dec_ref(); }
+            ~div_def() override { x->dec_ref(); }
         };
         struct var_def : public def {
             var v;
