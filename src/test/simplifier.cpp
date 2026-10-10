@@ -595,6 +595,56 @@ static void test_lambda_simplifier_proofs() {
     check_simplifier_proofs(m, st, assertions);
 }
 
+// Exercises `demodulator_simplifier`'s new proof production end-to-end:
+// - the demodulator `forall x. f(x) = x + 1` justifies rewriting a ground
+//   use site `f(2) != 3` down to `false` via a `PR_QUANT_INST` instance
+//   combined (via unit resolution and congruence/transitivity) with the
+//   th_rewriter's own arithmetic normalization proof;
+// - a second, `not`-shaped demodulator (`forall x. not p(x) <-> x > 0`,
+//   i.e. one of `demodulator_util::is_demodulator`'s reshaped cases) is
+//   also exercised, forcing `mk_instance_proof`'s `mk_rewrite` bridge path.
+// `check_simplifier_proofs` independently re-checks every resulting proof
+// object via `proof_checker`.
+static void test_demodulator_simplifier_proofs() {
+    ast_manager m(PGM_ENABLED);
+    reg_decl_plugins(m);
+    arith_util a(m);
+    sort* I = a.mk_int();
+    sort* dom1[1] = { I };
+    func_decl_ref f(m.mk_func_decl(symbol("f"), 1, dom1, I), m);
+    symbol xn("x");
+
+    // forall x. f(x) = x + 1
+    var_ref x(m.mk_var(0, I), m);
+    expr_ref one(a.mk_int(1), m);
+    expr_ref fx(m.mk_app(f, x.get()), m);
+    expr_ref rhs(a.mk_add(x, one), m);
+    expr_ref def(m.mk_eq(fx, rhs), m);
+    quantifier_ref q(m.mk_forall(1, &I, &xn, def), m);
+
+    // use site: not (f(2) = 3)   -- should rewrite to `false`.
+    expr_ref two(a.mk_int(2), m);
+    expr_ref three(a.mk_int(3), m);
+    expr_ref f2(m.mk_app(f, two.get()), m);
+    expr_ref use(m.mk_not(m.mk_eq(f2, three)), m);
+
+    expr_ref_vector assertions(m);
+    assertions.push_back(q);
+    assertions.push_back(use);
+
+    base_dependent_expr_state st(m);
+    demodulator_simplifier demod(m, params_ref(), st);
+    ENSURE(demod.supports_proofs());
+    st.add(dependent_expr(m, q, m.mk_asserted(q), nullptr));
+    demod.reduce();
+    st.advance_qhead();
+    st.add(dependent_expr(m, use, m.mk_asserted(use), nullptr));
+    demod.reduce();
+
+    ENSURE(m.is_false(st[1].fml()));
+    check_simplifier_proofs(m, st, assertions);
+}
+
 void tst_simplifier() {
 
     test_array();
@@ -609,4 +659,5 @@ void tst_simplifier() {
     test_flatten_suffix_proofs();
     test_skolemize_bug();
     test_lambda_simplifier_proofs();
+    test_demodulator_simplifier_proofs();
 }

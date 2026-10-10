@@ -247,20 +247,24 @@ no justification, and `operator()` returns only the rewritten term — no
 `proof_ref` output anywhere. Any caller that mutates a live, proof-tracked
 formula using it must therefore supply its own justification externally.
 
-Two concrete call sites do exactly this kind of mutation and currently drop
-the proof on the floor:
+Two concrete call sites did exactly this kind of mutation and, at the time of
+the original audit, dropped the proof on the floor:
 
 - **`ast/simplifiers/demodulator_simplifier.cpp:111`** — rewrites a formula
   using "demodulator" equations drawn from other formulas in the same goal,
   via `match_subst` (general first-order term rewriting with unification, not
   `expr_safe_replace`), and calls
-  `m_fmls.update(i, dependent_expr(m, r, nullptr, d))` — null proof. Currently
-  **benign**: `demodulator_simplifier` doesn't override `supports_proofs()`,
-  so it inherits the `dependent_expr_simplifier` default of `false` and is
-  entirely excluded from proof-producing pipelines by the
-  `dependent_expr_state_tactic` gate (see §2). Because its rewriting is
-  pattern-based (the "demodulator" equations may contain free variables
-  unified against subterms), it does not fit the new rule below as-is.
+  `m_fmls.update(i, dependent_expr(m, r, nullptr, d))` — null proof. At the
+  time of this audit this was **benign**: `demodulator_simplifier` didn't
+  override `supports_proofs()`, so it inherited the
+  `dependent_expr_simplifier` default of `false` and was entirely excluded
+  from proof-producing pipelines by the `dependent_expr_state_tactic` gate
+  (see §2). Because its rewriting is pattern-based (the "demodulator"
+  equations may contain free variables unified against subterms), it did not
+  fit the new rule below as-is at that time. **Since wired up** (see
+  "`demodulator_simplifier` wired up to produce real proofs" below):
+  `supports_proofs()` now returns `true` and every rewrite step is justified
+  via `PR_QUANT_INST` + `mk_unit_resolution`, not `PR_DEMODULATION`.
 - **`ast/simplifiers/lambda_simplifier.cpp:104,157`** — this one *does* use
   `expr_safe_replace` directly, and for exactly the textbook "demodulation"
   shape: it finds macro definitions `c_k = L_k` (constants defined by lambda
@@ -365,6 +369,74 @@ failure paths are `UNREACHABLE()`-guarded). Fixed by adding a `match_eq`
 fallback at both of the two places this shape is checked (the top-level
 `fact`, and the unwrapped `PR_BIND` premise's own fact).
 
+### `demodulator_simplifier` wired up to produce real proofs
+
+Unlike `lambda_simplifier`'s ground, simultaneous `expr_safe_replace`
+substitution, `demodulator_simplifier` performs general unification-based
+rewriting: each "demodulator" is a universally-quantified equation (or
+reshaped equivalent — `not`-wrapped, or a bare positive/negative atom; see
+`demodulator_util::is_demodulator`'s four shapes) whose variables get bound
+to a matched ground subterm, one redex at a time, inside a bespoke bottom-up
+rewrite engine (`demodulator_rewriter_util::rewrite`) that is itself
+re-entrant/cascading (a rewritten node is re-queued, not popped, until a
+fixpoint is reached). `supports_proofs()` now returns `true`, and the engine
+builds real proofs end-to-end:
+
+- `demodulator_match_subst::get_binding(var_idx, r)` (new) exposes, after a
+  successful match, the ground term bound to each of the demodulator's
+  pattern variables.
+- `demodulator_simplifier::mk_instance_proof(i, f, args, np)` (new) justifies
+  one matched rewrite step `f(args) = np`: instantiates demodulator `i`'s
+  raw defining formula at the recovered ground bindings via `var_subst`,
+  builds a clause proof via `mk_quant_inst`, resolves it against the
+  demodulator's own proof via `mk_unit_resolution` to directly derive the
+  ground instance, and — since `is_demodulator` may have reshaped the
+  original equation (e.g. moved a `not` across it, or stored it as a bare
+  atom) — bridges to the exact needed shape `f(args) = np` via a
+  `mk_rewrite` + `mk_modus_ponens` step when the two aren't already
+  pointer-identical. **Deliberately scoped to ground rewriting only**: bails
+  out (returns `nullptr`, term rewrite unaffected) if any argument is
+  non-ground, i.e. the redex occurs inside another, outer quantifier's bound
+  variables (one demodulator rewriting inside another's body) — a conscious
+  scope reduction, not a bug.
+- `demodulator_rewriter_util` gained a parallel proof cache
+  (`m_proof_cache`/`update()`) mirroring its existing term-rewrite cache:
+  every cache update that changes a node's value is paired with a step
+  proof, composed via `mk_transitivity` across the engine's re-entrant
+  iterations. The `AST_APP` case composes per-changed-child congruence
+  proofs (`mk_congruence`, only for positions that actually changed — the
+  checker doesn't require reflexivity proofs for unchanged ones) with either
+  the matched rewrite-instance proof or the `th_rewriter`'s own
+  proof-producing normalization (`operator()` overload, not the non-proof
+  `mk_app`); `AST_QUANTIFIER` composes `mk_bind_proof`+`mk_quant_intro` (body
+  changed) with `mk_elim_unused_vars` (if that pass fired). The one
+  deliberately-unjustified path is the pre-existing "demodulator cycle"
+  heuristic (cycle-breaking, not a real rewrite) — left with no proof;
+  ancestors see a missing proof and gracefully fall back to no proof
+  themselves rather than fabricate one.
+- A new regression test, `test_demodulator_simplifier_proofs()`
+  (`src/test/simplifier.cpp`), exercises a ground demodulator (`forall x.
+  f(x) = x + 1`) rewriting a use site (`not (f(2) = 3)`) down to `false`,
+  checked via the same `check_simplifier_proofs` harness.
+
+**This surfaced one implementation bug (not a kernel-checker gap), caught by
+the regression test and `proof_checker`'s re-validation**: an early version
+of `mk_instance_proof` returned a locally-scoped `proof_ref`'s raw pointer
+directly (`return raw_pr;` for a `proof*`-returning function) — the local's
+destructor runs before the caller can take ownership of the returned
+pointer, and if that local was the *only* owner (refcount 1), the proof
+object is freed out from under the caller, corrupting a sibling congruence
+proof's premise list with whatever unrelated proof object happened to be
+reallocated at that address next. Fixed by pinning every proof returned this
+way in a member `proof_ref_vector` (`m_proof_pinned`, reset once per
+`reduce()`, by which point ownership has transferred into the `dependent_expr`
+state) before returning the bare pointer.
+
+As with `lambda_simplifier`, `PR_QUANT_INST`'s `check1_basic` case remains an
+unchecked placeholder (`// TODO return true;`) — reused as-is, matching how
+`mk_quant_inst` is already used (unchecked) elsewhere in the codebase; not
+fixed here (out of scope).
+
 ## Summary
 
 | Layer | Genuine latent gaps found | Everything else |
@@ -373,7 +445,7 @@ fallback at both of the two places this shape is checked (the top-level
 | `ast/simplifiers` | **1 confirmed, now fixed: `euf_completion`'s `map_congruence`/`add_consequence` added null-proof marker formulas to a live, proof-enabled goal — fixed by disabling the simplifier under proofs (`supports_proofs()` now `false`). Also: `distribute_forall`'s `PR_PUSH_QUANT` proof was well-justified at the simplifier level but the kernel checker itself had a bug rejecting (literally) every such proof — fixed.** | 9 other proof-aware passes correctly justify every rewrite; ~45 others are unreachable under proofs via the `supports_proofs()` gate |
 | `tactic` | none found | `goal`'s assert-on-null-proof is an effective safety net; concrete tactics sampled are all correct or self-excluding |
 | `smt` | none found in sampled core + 5 theory families | consistent `PR_TH_LEMMA`/extended-justification usage; `PR_TH_LEMMA` semantic trust boundary is pre-existing/known, not new |
-| `expr_safe_replace` call sites | none *live* at the time of the original audit (both candidates, `demodulator_simplifier` and `lambda_simplifier`, were excluded from proof-producing runs via `supports_proofs()==false`); **`lambda_simplifier` has since been wired up** to actually produce proofs via the new `PR_DEMODULATION` rule (`supports_proofs()` now `true`); `demodulator_simplifier` remains unaddressed (harder: unification-based pattern rewriting over universally-quantified equations, would need `PR_QUANT_INST` + per-redex proof threading through its bespoke rewrite engine) | new `PR_DEMODULATION` kernel rule (self-checking, not merely trusted); **also fixed a second, independent `PR_QUANT_INTRO` checker gap** surfaced while testing `lambda_simplifier`: non-Boolean-bodied `lambda` quantifier-introduction proofs were unconditionally rejected (`match_iff`/`match_oeq` wrongly required a Bool-sorted fact) |
+| `expr_safe_replace` call sites | none *live* at the time of the original audit (both candidates, `demodulator_simplifier` and `lambda_simplifier`, were excluded from proof-producing runs via `supports_proofs()==false`); **both have since been wired up** — `lambda_simplifier` via the new `PR_DEMODULATION` rule, `demodulator_simplifier` via `PR_QUANT_INST`-based per-redex instance proofs threaded through its bespoke rewrite engine (`supports_proofs()` now `true` for both) | new `PR_DEMODULATION` kernel rule (self-checking, not merely trusted); **also fixed a second, independent `PR_QUANT_INTRO` checker gap** surfaced while testing `lambda_simplifier`: non-Boolean-bodied `lambda` quantifier-introduction proofs were unconditionally rejected (`match_iff`/`match_oeq` wrongly required a Bool-sorted fact); `demodulator_simplifier` wiring additionally caught (and fixed) a locally-scoped-`proof_ref` early-free bug in its own new code |
 
 Overall: three of four layers audited clean (modulo implicit, unenforced
 preconditions worth hardening with asserts/comments in `ast/rewriter`); the
